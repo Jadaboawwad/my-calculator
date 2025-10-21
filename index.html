@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>النظام المتين الكامل - Islamic Prayer Times & Numerology</title>
+  <meta name="description" content="نظام شامل لمواعيد الصلاة والإعجاز العددي القرآني مع نظرية تسلا 3-6-9" />
+  <meta name="keywords" content="prayer times, islamic, numerology, tesla 369, quran, arabic" />
+  <meta name="author" content="Unified System" />
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="النظام المتين الكامل - Islamic Prayer Times & Numerology" />
+  <meta property="og:description" content="نظام شامل لمواعيد الصلاة والإعجاز العددي القرآني مع نظرية تسلا 3-6-9" />
+  <meta property="og:locale" content="ar_SA" />
+  
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:title" content="النظام المتين الكامل - Islamic Prayer Times & Numerology" />
+  <meta property="twitter:description" content="نظام شامل لمواعيد الصلاة والإعجاز العددي القرآني مع نظرية تسلا 3-6-9" />
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  
+  <!-- Preload fonts for better performance -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* Critical CSS for initial load */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Noto Sans Arabic', 'Amiri', Arial, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #581c87 50%, #0f172a 100%);
+      color: white;
+      direction: rtl;
+      text-align: right;
+    }
+    
+    #root {
+      min-height: 100vh;
+    }
+    
+    /* Loading spinner */
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      flex-direction: column;
+    }
+    
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid #374151;
+      border-top: 3px solid #3b82f6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .loading-text {
+      margin-top: 20px;
+      font-size: 18px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="loading">
+      <div class="spinner"></div>
+      <div class="loading-text">جاري التحميل...</div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  unified-system:
+    build: .
+    container_name: unified-system-app
+    ports:
+      - "3000:80"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.unified-system.rule=Host(`unified-system.localhost`)"
+      - "traefik.http.services.unified-system.loadbalancer.server.port=80"
+
+  # Optional: Add a reverse proxy for production
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: unified-system-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-proxy.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - unified-system
+    restart: unless-stopped
+    profiles:
+      - proxy
