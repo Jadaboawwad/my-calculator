@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Clock, Star, TrendingUp, Lightbulb, AlertCircle, BookOpen, Sparkles, Zap } from 'lucide-react';
-import { getNumberInfo, getNearestNumberInfo, calculateNumberEnergy } from './quranicNumbersDatabase';
+import { getNumberInfo, getNearestNumberInfo, calculateNumberEnergy } from './../../Quranicnumbersdatabase';
 
 const WhatToDoNow = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
