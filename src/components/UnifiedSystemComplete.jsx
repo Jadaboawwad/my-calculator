@@ -1377,8 +1377,8 @@ const UnifiedSystemComplete = () => {
                       {prayer.iqama && prayer.iqama.length > 0 && (
                         <div className="p-3 bg-gradient-to-r from-yellow-900/40 to-orange-900/40 rounded-lg border border-yellow-400/50">
                           <div className="text-sm font-bold text-yellow-200 mb-3 text-center">⭐ أفضل أوقات الإقامة (رقم 7 ظاهر)</div>
-                          <div className="space-y-2">
-                            {prayer.iqama.slice(0, 3).map((iqama, idx) => (
+                          <div className="space-y-2 max-h-80 overflow-y-auto">
+                            {prayer.iqama.slice(0, 5).map((iqama, idx) => (
                               <div key={idx} className={`p-2 rounded-lg border ${iqama.has7 ? "bg-yellow-900/50 border-yellow-400/60" : "bg-green-900/30 border-green-400/30"}`}>
                                 <div className="flex justify-between items-center mb-1">
                                   <span className="font-bold text-yellow-100">

@@ -27,11 +27,11 @@ const WhatToDoNow = () => {
     return () => clearInterval(displayTimer);
   }, []);
 
-  // المستوى 2: تحليل سريع كل 5 ثواني (للتغييرات الصغيرة)
+  // المستوى 2: تحليل سريع كل 4 ثواني (للتغييرات الصغيرة)
   useEffect(() => {
     const quickAnalysisTimer = setInterval(() => {
       quickAnalysis(new Date());
-    }, 5000);
+    }, 4000);
     
     return () => clearInterval(quickAnalysisTimer);
   }, []);
@@ -150,14 +150,16 @@ const WhatToDoNow = () => {
     return false;
   };
 
-  // استخراج الأرقام من الوقت بذكاء
+  // استخراج الأرقام من الوقت بذكاء محسّن
   const extractNumbersFromTime = (hours, minutes, seconds) => {
     const numbers = new Set();
     
+    // القيم الأساسية (وزن عالي)
     numbers.add(hours);
     numbers.add(minutes);
     numbers.add(seconds);
     
+    // استخراج الأرقام الفردية من كل قيمة
     [hours, minutes, seconds].forEach(num => {
       if (num >= 10) {
         numbers.add(Math.floor(num / 10));
@@ -165,21 +167,53 @@ const WhatToDoNow = () => {
       }
     });
     
+    // المجاميع المختلفة (وزن متوسط)
     const totalSum = hours + minutes + seconds;
     numbers.add(totalSum);
     
-    let reducedSum = totalSum;
-    while (reducedSum > 9 && reducedSum !== 11 && reducedSum !== 22 && reducedSum !== 33) {
-      reducedSum = String(reducedSum)
-        .split('')
-        .reduce((a, b) => parseInt(a) + parseInt(b), 0);
-    }
-    numbers.add(reducedSum);
+    const hourMinuteSum = hours + minutes;
+    numbers.add(hourMinuteSum);
     
-    numbers.add(hours + minutes);
+    const minuteSecondSum = minutes + seconds;
+    numbers.add(minuteSecondSum);
+    
+    // الاختزال الذكي للمجاميع
+    const reduceToSingle = (num) => {
+      if (num <= 9 || num === 11 || num === 22 || num === 33) return num;
+      let reduced = num;
+      while (reduced > 9 && reduced !== 11 && reduced !== 22 && reduced !== 33) {
+        reduced = String(reduced)
+          .split('')
+          .reduce((a, b) => parseInt(a) + parseInt(b), 0);
+      }
+      return reduced;
+    };
+    
+    numbers.add(reduceToSingle(totalSum));
+    numbers.add(reduceToSingle(hourMinuteSum));
+    numbers.add(reduceToSingle(minuteSecondSum));
+    numbers.add(reduceToSingle(hours));
+    numbers.add(reduceToSingle(minutes));
+    numbers.add(reduceToSingle(seconds));
+    
+    // الفروقات (وزن منخفض)
+    if (hours > minutes) numbers.add(hours - minutes);
     if (minutes > seconds) numbers.add(minutes - seconds);
+    if (hours > seconds) numbers.add(hours - seconds);
     
-    return Array.from(numbers).sort((a, b) => b - a);
+    // الأرقام الخاصة في الأرقام الكبيرة
+    [totalSum, hourMinuteSum, minuteSecondSum].forEach(sum => {
+      if (sum >= 100) {
+        numbers.add(Math.floor(sum / 100));
+        numbers.add(Math.floor((sum % 100) / 10));
+        numbers.add(sum % 10);
+      } else if (sum >= 10) {
+        numbers.add(Math.floor(sum / 10));
+        numbers.add(sum % 10);
+      }
+    });
+    
+    return Array.from(numbers).filter(n => n >= 0 && n < 10000).sort((a, b) => b - a);
   };
 
   // تحليل الأرقام
@@ -228,7 +262,7 @@ const WhatToDoNow = () => {
     
     return recommendations
       .sort((a, b) => b.priority - a.priority)
-      .slice(0, 3);
+      .slice(0, 4);
   };
 
   // اختيار أفضل آية
@@ -250,25 +284,86 @@ const WhatToDoNow = () => {
     return verses[0];
   };
 
-  // حساب طاقة الوقت
+  // حساب طاقة الوقت المحسّن
   const calculateTeslaEnergy = (hours, minutes, seconds, numbers) => {
     const teslaNumbers = [3, 6, 9];
-    const teslaScore = numbers.filter(n => teslaNumbers.includes(n % 10) || teslaNumbers.includes(n)).length;
+    let teslaScore = 0;
+    let blessedScore = 0;
     
-    const blessedScore = numbers.filter(n => n === 7 || n % 10 === 7).length;
+    // حساب نقاط تسلا مع أوزان مختلفة
+    numbers.forEach(num => {
+      // الرقم الكامل يساوي 3، 6، أو 9 (وزن عالي: 2 نقطة)
+      if (teslaNumbers.includes(num)) {
+        teslaScore += 2;
+      }
+      // الرقم ينتهي بـ 3، 6، أو 9 (وزن متوسط: 1 نقطة)
+      else if (num > 9 && teslaNumbers.includes(num % 10)) {
+        teslaScore += 1;
+      }
+      // الرقم يحتوي على 3، 6، أو 9 في منتصفه (وزن منخفض: 0.5 نقطة)
+      else if (num > 99) {
+        const digits = String(num).split('').map(Number);
+        digits.forEach(d => {
+          if (teslaNumbers.includes(d)) teslaScore += 0.5;
+        });
+      }
+    });
     
+    // حساب نقاط البركة (7) مع أوزان مختلفة
+    numbers.forEach(num => {
+      // الرقم الكامل يساوي 7 (وزن عالي: 3 نقطة)
+      if (num === 7) {
+        blessedScore += 3;
+      }
+      // الرقم ينتهي بـ 7 (وزن متوسط: 1.5 نقطة)
+      else if (num > 9 && num % 10 === 7) {
+        blessedScore += 1.5;
+      }
+      // الرقم يحتوي على 7 في منتصفه (وزن منخفض: 1 نقطة)
+      else if (num > 99) {
+        const digits = String(num).split('').map(Number);
+        digits.forEach(d => {
+          if (d === 7) blessedScore += 1;
+        });
+      }
+      // الرقم 17، 27، 37... (وزن متوسط: 1 نقطة)
+      else if (num > 7 && num < 100 && num % 10 === 7) {
+        blessedScore += 1;
+      }
+    });
+    
+    // حساب نقاط إضافية من الأرقام الفردية في الوقت الأصلي
     const allDigits = [
-      ...String(hours).split(''),
-      ...String(minutes).split(''),
-      ...String(seconds).split('')
+      ...String(hours).padStart(2, '0').split(''),
+      ...String(minutes).padStart(2, '0').split(''),
+      ...String(seconds).padStart(2, '0').split('')
     ].map(Number);
     
-    const digitTeslaScore = allDigits.filter(d => teslaNumbers.includes(d)).length;
-    const digitBlessedScore = allDigits.filter(d => d === 7).length;
+    allDigits.forEach(d => {
+      if (teslaNumbers.includes(d)) teslaScore += 1; // وزن عالي للأرقام الأصلية
+      if (d === 7) blessedScore += 2; // وزن عالي جداً لرقم 7 في الوقت الأصلي
+    });
     
-    const totalTeslaScore = teslaScore + digitTeslaScore;
-    const totalBlessedScore = blessedScore + digitBlessedScore;
+    // نقاط إضافية للأنماط الخاصة
+    // نمط 3-6-9 كامل في نفس الوقت
+    const has3 = allDigits.includes(3);
+    const has6 = allDigits.includes(6);
+    const has9 = allDigits.includes(9);
+    if (has3 && has6 && has9) {
+      teslaScore += 5; // مكافأة كبيرة للنمط الكامل
+    }
     
+    // نمط 7-7 (رقم 7 متكرر)
+    const sevenCount = allDigits.filter(d => d === 7).length;
+    if (sevenCount >= 2) {
+      blessedScore += 3; // مكافأة للتكرار
+    }
+    
+    // تقريب النقاط إلى أعداد صحيحة للعرض
+    const totalTeslaScore = Math.round(teslaScore);
+    const totalBlessedScore = Math.round(blessedScore);
+    
+    // تحديد مستوى الطاقة بشكل محسّن
     let energy = {
       level: 'medium',
       description: 'طاقة متوازنة',
@@ -277,7 +372,8 @@ const WhatToDoNow = () => {
       blessedScore: totalBlessedScore
     };
     
-    if (totalTeslaScore >= 4 && totalBlessedScore >= 2) {
+    // طاقة إلهية استثنائية (تسلا + بركة عالية معاً)
+    if (totalTeslaScore >= 5 && totalBlessedScore >= 3) {
       energy = {
         level: 'divine',
         description: '🌟 طاقة إلهية استثنائية - تسلا + البركة معاً',
@@ -285,7 +381,9 @@ const WhatToDoNow = () => {
         teslaScore: totalTeslaScore,
         blessedScore: totalBlessedScore
       };
-    } else if (totalTeslaScore >= 5) {
+    }
+    // طاقة تسلا عالية جداً
+    else if (totalTeslaScore >= 6) {
       energy = {
         level: 'very_high',
         description: '⚡ طاقة تسلا عالية جداً (3-6-9)',
@@ -293,7 +391,9 @@ const WhatToDoNow = () => {
         teslaScore: totalTeslaScore,
         blessedScore: totalBlessedScore
       };
-    } else if (totalBlessedScore >= 3) {
+    }
+    // وقت مبارك جداً (بركة عالية)
+    else if (totalBlessedScore >= 5) {
       energy = {
         level: 'blessed',
         description: '✨ وقت مبارك جداً - رقم 7 المبارك',
@@ -301,7 +401,9 @@ const WhatToDoNow = () => {
         teslaScore: totalTeslaScore,
         blessedScore: totalBlessedScore
       };
-    } else if (totalTeslaScore >= 3) {
+    }
+    // طاقة تسلا جيدة
+    else if (totalTeslaScore >= 4) {
       energy = {
         level: 'high',
         description: '🔥 طاقة تسلا جيدة',
@@ -309,7 +411,9 @@ const WhatToDoNow = () => {
         teslaScore: totalTeslaScore,
         blessedScore: totalBlessedScore
       };
-    } else if (totalBlessedScore >= 2) {
+    }
+    // وقت مبارك
+    else if (totalBlessedScore >= 3) {
       energy = {
         level: 'blessed_medium',
         description: '🌙 وقت مبارك - يحتوي على الرقم 7',
@@ -317,11 +421,23 @@ const WhatToDoNow = () => {
         teslaScore: totalTeslaScore,
         blessedScore: totalBlessedScore
       };
-    } else if (totalTeslaScore >= 1) {
+    }
+    // طاقة تسلا متوسطة
+    else if (totalTeslaScore >= 2) {
       energy = {
         level: 'medium_high',
         description: '💫 طاقة متوسطة - يحتوي على أحد أرقام تسلا',
         color: 'cyan',
+        teslaScore: totalTeslaScore,
+        blessedScore: totalBlessedScore
+      };
+    }
+    // بركة خفيفة
+    else if (totalBlessedScore >= 1) {
+      energy = {
+        level: 'blessed_light',
+        description: '🌙 وقت مبارك خفيف - يحتوي على الرقم 7',
+        color: 'emerald',
         teslaScore: totalTeslaScore,
         blessedScore: totalBlessedScore
       };
@@ -349,6 +465,7 @@ const WhatToDoNow = () => {
       very_high: 'from-purple-500 to-pink-500',
       blessed: 'from-green-500 to-emerald-500',
       blessed_medium: 'from-emerald-400 to-green-400',
+      blessed_light: 'from-green-300 to-emerald-300',
       high: 'from-teal-500 to-cyan-500',
       medium_high: 'from-cyan-400 to-blue-400',
       medium: 'from-blue-500 to-indigo-500',
@@ -585,7 +702,7 @@ const WhatToDoNow = () => {
         </p>
         <p className="flex items-center justify-center gap-2">
           <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-          فحص سريع للتغييرات كل 5 ثواني
+          فحص سريع للتغييرات كل 4 ثواني
         </p>
         <p className="mt-3 text-purple-600 dark:text-purple-400 font-arabic text-sm sm:text-base">
           "وَلِتَعْلَمُوا عَدَدَ السِّنِينَ وَالْحِسَابَ"
