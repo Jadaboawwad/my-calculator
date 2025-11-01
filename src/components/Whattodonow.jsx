@@ -8,6 +8,8 @@ const WhatToDoNow = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [pulseEffect, setPulseEffect] = useState(false);
   const [lastSignificantChange, setLastSignificantChange] = useState(null);
+  const [selectedVerse, setSelectedVerse] = useState(null);
+  const [verseLoading, setVerseLoading] = useState(false);
   
   // حالات التنبيه
   const [alerts, setAlerts] = useState({
@@ -56,6 +58,117 @@ const WhatToDoNow = () => {
   }, []);
 
   // ===== دوال التحليل =====
+
+  // حساب رقم الآية بناءً على النظام 19 والوقت والطاقة
+  const calculateVerseNumber = (hours, minutes, seconds, teslaScore, blessedScore, recommendations) => {
+    const TOTAL_VERSES = 6236; // إجمالي آيات القرآن
+    const MAGIC_NUMBER = 19; // الرقم 19 المقدس
+    
+    // حساب الأساس من الوقت (باستخدام عدة عوامل)
+    const timeInSeconds = (hours * 3600) + (minutes * 60) + seconds;
+    const timeInMinutes = (hours * 60) + minutes;
+    const timeProduct = hours * minutes * seconds;
+    
+    // حساب عامل من طاقة تسلا (مضاعف قوي باستخدام 19)
+    const teslaFactor = teslaScore * MAGIC_NUMBER * (teslaScore > 0 ? 2 : 1);
+    
+    // حساب عامل من البركة (مضاعف باستخدام 7)
+    const blessedFactor = blessedScore * 7 * (blessedScore > 0 ? 3 : 1);
+    
+    // حساب عامل من التوصيات (استخدام أرقام التوصيات والأولوية)
+    let recommendationsFactor = 0;
+    if (recommendations && recommendations.length > 0) {
+      recommendations.forEach(rec => {
+        const priorityWeight = rec.priority || 1;
+        recommendationsFactor += rec.number * priorityWeight * MAGIC_NUMBER;
+      });
+    }
+    
+    // حساب عوامل إضافية من الوقت
+    const hourMinuteSum = hours + minutes;
+    const minuteSecondSum = minutes + seconds;
+    const totalTimeSum = hours + minutes + seconds;
+    
+    // حساب رقم الآية النهائي باستخدام صيغة متقدمة
+    // الصيغة: (وقت × عوامل + تسلا × 19² + بركة × 7² + توصيات × 19) modulo 6236
+    let verseNumber = (
+      timeInSeconds +
+      (timeInMinutes * 10) +
+      (timeProduct % 1000) +
+      (hourMinuteSum * 100) +
+      (minuteSecondSum * 50) +
+      (totalTimeSum * 25) +
+      teslaFactor +
+      blessedFactor +
+      recommendationsFactor +
+      (MAGIC_NUMBER * 19) // عامل ثابت من النظام 19
+    ) % TOTAL_VERSES;
+    
+    // التأكد من أن الرقم بين 1 و 6236
+    if (verseNumber === 0) {
+      verseNumber = TOTAL_VERSES; // إذا كان 0، استخدم آخر آية
+    } else if (verseNumber < 1) {
+      verseNumber = Math.abs(verseNumber) % TOTAL_VERSES + 1;
+    }
+    
+    // تطبيق تعديل نهائي بناءً على الطاقة
+    if (teslaScore >= 5 || blessedScore >= 3) {
+      // إذا كانت الطاقة عالية، أضف تعديل طفيف
+      verseNumber = (verseNumber + (teslaScore + blessedScore)) % TOTAL_VERSES;
+      if (verseNumber === 0) verseNumber = TOTAL_VERSES;
+    }
+    
+    return Math.floor(verseNumber);
+  };
+
+  // جلب الآية من API
+  const fetchVerseFromAPI = async (verseNumber) => {
+    setVerseLoading(true);
+    try {
+      // استخدام API alquran.cloud
+      const response = await fetch(`https://api.alquran.cloud/v1/ayah/${verseNumber}/editions/quran-uthmani,ar.asad`, {
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.code === 200 && data.data && data.data.length > 0) {
+        const verseData = data.data[0]; // نص الآية (quran-uthmani)
+        const translationData = data.data.length > 1 ? data.data[1] : null; // الترجمة إن وجدت
+        
+        setSelectedVerse({
+          number: verseNumber,
+          text: verseData.text,
+          surah: verseData.surah?.name || 'غير معروف',
+          surahNumber: verseData.surah?.number || 0,
+          ayah: verseData.numberInSurah || 0,
+          translation: translationData?.text || null
+        });
+      } else {
+        throw new Error('Invalid API response format');
+      }
+    } catch (error) {
+      console.error('Error fetching verse:', error);
+      // في حالة الخطأ، نعرض رسالة مفيدة
+      setSelectedVerse({
+        number: verseNumber,
+        text: 'حدث خطأ في تحميل الآية. يرجى تحديث الصفحة.',
+        surah: 'خطأ في التحميل',
+        surahNumber: 0,
+        ayah: 0,
+        error: true,
+        errorMessage: error.message
+      });
+    } finally {
+      setVerseLoading(false);
+    }
+  };
 
   // تحليل سريع - يفحص التغييرات البسيطة فقط
   const quickAnalysis = useCallback((time) => {
@@ -137,6 +250,18 @@ const WhatToDoNow = () => {
       teslaEnergy: teslaEnergy,
       priority: priority
     });
+    
+    // حساب رقم الآية وجلبها من API
+    const verseNumber = calculateVerseNumber(
+      hours,
+      minutes,
+      seconds,
+      teslaEnergy.teslaScore,
+      teslaEnergy.blessedScore,
+      recommendations
+    );
+    
+    fetchVerseFromAPI(verseNumber);
     
     setIsLoading(false);
   }, [analysis]);
@@ -555,6 +680,72 @@ const WhatToDoNow = () => {
           </div>
         </div>
       </div>
+
+      {/* الآية المختارة بناءً على النظام 19 */}
+      {selectedVerse && (
+        <div className="bg-gradient-to-br from-purple-900/40 via-blue-900/40 to-indigo-900/40 backdrop-blur-lg rounded-2xl p-4 sm:p-6 border-2 border-purple-400/50 shadow-xl">
+          <div className="text-center mb-4">
+            <h3 className="text-xl sm:text-2xl font-bold text-purple-300 flex items-center justify-center gap-2">
+              <BookOpen className="w-6 h-6 sm:w-8 sm:h-8" />
+              📖 الآية المختارة لك الآن (بناءً على النظام 19)
+            </h3>
+            <p className="text-sm sm:text-base text-purple-200 mt-2">
+              الآية رقم {selectedVerse.number} من أصل 6236 آية
+            </p>
+          </div>
+
+          {verseLoading ? (
+            <div className="flex items-center justify-center p-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+              <span className="mr-3 text-purple-300">جاري تحميل الآية...</span>
+            </div>
+          ) : selectedVerse.error ? (
+            <div className="text-center p-4 text-red-300">
+              <p>حدث خطأ في تحميل الآية. يرجى المحاولة لاحقاً.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* نص الآية */}
+              <div className="bg-gradient-to-r from-purple-800/30 to-blue-800/30 p-4 sm:p-6 rounded-lg border border-purple-400/30">
+                <p className="text-2xl sm:text-3xl md:text-4xl text-white leading-loose text-center font-arabic mb-4">
+                  {selectedVerse.text}
+                </p>
+              </div>
+
+              {/* معلومات الآية */}
+              <div className="bg-white/10 rounded-lg p-4 border border-purple-300/30">
+                <div className="grid grid-cols-2 gap-4 text-center">
+                  <div>
+                    <div className="text-xs sm:text-sm text-purple-300 mb-1">السورة</div>
+                    <div className="text-lg sm:text-xl font-bold text-purple-100">
+                      {selectedVerse.surah} ({selectedVerse.surahNumber})
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs sm:text-sm text-purple-300 mb-1">رقم الآية في السورة</div>
+                    <div className="text-lg sm:text-xl font-bold text-purple-100">
+                      {selectedVerse.ayah}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* معلومات الحساب */}
+              <div className="bg-gradient-to-r from-indigo-900/30 to-purple-900/30 rounded-lg p-3 border border-indigo-400/30">
+                <div className="text-xs sm:text-sm text-indigo-200 text-center">
+                  <p className="mb-1">💡 تم اختيار هذه الآية بناءً على:</p>
+                  <div className="flex flex-wrap justify-center gap-2 mt-2">
+                    <span className="bg-purple-700/50 px-2 py-1 rounded">⏰ الوقت: {analysis.time.hours}:{String(analysis.time.minutes).padStart(2, '0')}:{String(analysis.time.seconds).padStart(2, '0')}</span>
+                    <span className="bg-purple-700/50 px-2 py-1 rounded">⚡ تسلا: {analysis.teslaEnergy.teslaScore}</span>
+                    <span className="bg-purple-700/50 px-2 py-1 rounded">✨ بركة: {analysis.teslaEnergy.blessedScore}</span>
+                    <span className="bg-purple-700/50 px-2 py-1 rounded">🔢 النظام: 19</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* التوصيات */}
       <div className="space-y-3 sm:space-y-4">
