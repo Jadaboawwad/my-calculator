@@ -60,7 +60,16 @@ const WhatToDoNow = () => {
   // ===== دوال التحليل =====
 
   // حساب رقم الآية بناءً على النظام 19 والوقت والطاقة
-  const calculateVerseNumber = (hours, minutes, seconds, teslaScore, blessedScore, recommendations) => {
+  const calculateVerseNumber = (
+    hours,
+    minutes,
+    seconds,
+    teslaScore,
+    blessedScore,
+    recommendations,
+    gregorianDate,
+    hijriDate
+  ) => {
     const TOTAL_VERSES = 6236; // إجمالي آيات القرآن
     const MAGIC_NUMBER = 19; // الرقم 19 المقدس
     
@@ -89,6 +98,19 @@ const WhatToDoNow = () => {
     const minuteSecondSum = minutes + seconds;
     const totalTimeSum = hours + minutes + seconds;
     
+    // حساب عوامل التاريخ (ميلادي وهجري)
+    const { year: gYear = 0, month: gMonth = 0, day: gDay = 0 } = gregorianDate || {};
+    const { year: hYear = 0, month: hMonth = 0, day: hDay = 0 } = hijriDate || {};
+    
+    const gregorianSum = gYear + gMonth + gDay;
+    const hijriSum = hYear + hMonth + hDay;
+    const dateDifference = Math.abs(gYear - hYear);
+    
+    const gregorianFactor = (gregorianSum * MAGIC_NUMBER) + ((gYear % 100) * 7);
+    const hijriFactor = (hijriSum * 7 * 2) + ((hYear % 100) * MAGIC_NUMBER);
+    const dateProduct = (Math.max(gDay, 1) * Math.max(hDay, 1) * MAGIC_NUMBER);
+    const combinedDateFactor = gregorianFactor + hijriFactor + (dateDifference * 11);
+    
     // حساب رقم الآية النهائي باستخدام صيغة متقدمة
     // الصيغة: (وقت × عوامل + تسلا × 19² + بركة × 7² + توصيات × 19) modulo 6236
     let verseNumber = (
@@ -98,6 +120,8 @@ const WhatToDoNow = () => {
       (hourMinuteSum * 100) +
       (minuteSecondSum * 50) +
       (totalTimeSum * 25) +
+      combinedDateFactor +
+      dateProduct +
       teslaFactor +
       blessedFactor +
       recommendationsFactor +
@@ -122,7 +146,7 @@ const WhatToDoNow = () => {
   };
 
   // جلب الآية من API
-  const fetchVerseFromAPI = async (verseNumber) => {
+  const fetchVerseFromAPI = async (verseNumber, meta = {}) => {
     setVerseLoading(true);
     try {
       // استخدام API alquran.cloud
@@ -148,7 +172,9 @@ const WhatToDoNow = () => {
           surah: verseData.surah?.name || 'غير معروف',
           surahNumber: verseData.surah?.number || 0,
           ayah: verseData.numberInSurah || 0,
-          translation: translationData?.text || null
+          translation: translationData?.text || null,
+          gregorianDate: meta.gregorianDate || null,
+          hijriDate: meta.hijriDate || null
         });
       } else {
         throw new Error('Invalid API response format');
@@ -163,7 +189,9 @@ const WhatToDoNow = () => {
         surahNumber: 0,
         ayah: 0,
         error: true,
-        errorMessage: error.message
+        errorMessage: error.message,
+        gregorianDate: meta.gregorianDate || null,
+        hijriDate: meta.hijriDate || null
       });
     } finally {
       setVerseLoading(false);
@@ -214,6 +242,34 @@ const WhatToDoNow = () => {
     const hours = time.getHours();
     const minutes = time.getMinutes();
     const seconds = time.getSeconds();
+    const gregorianDate = {
+      year: time.getFullYear(),
+      month: time.getMonth() + 1,
+      day: time.getDate()
+    };
+    
+    let hijriDate = { year: 0, month: 0, day: 0 };
+    try {
+      const hijriFormatter = new Intl.DateTimeFormat('en-TN-u-ca-islamic', {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric'
+      });
+      const hijriParts = hijriFormatter.formatToParts(time);
+      const hijriMap = hijriParts.reduce((acc, part) => {
+        if (part.type === 'year') acc.year = parseInt(part.value, 10);
+        if (part.type === 'month') acc.month = parseInt(part.value, 10);
+        if (part.type === 'day') acc.day = parseInt(part.value, 10);
+        return acc;
+      }, {});
+      hijriDate = {
+        year: hijriMap.year || 0,
+        month: hijriMap.month || 0,
+        day: hijriMap.day || 0
+      };
+    } catch (error) {
+      console.warn('Hijri date calculation failed:', error);
+    }
     
     // استخراج الأرقام
     const timeNumbers = extractNumbersFromTime(hours, minutes, seconds);
@@ -258,10 +314,12 @@ const WhatToDoNow = () => {
       seconds,
       teslaEnergy.teslaScore,
       teslaEnergy.blessedScore,
-      recommendations
+      recommendations,
+      gregorianDate,
+      hijriDate
     );
     
-    fetchVerseFromAPI(verseNumber);
+    fetchVerseFromAPI(verseNumber, { gregorianDate, hijriDate });
     
     setIsLoading(false);
   }, [analysis]);
@@ -729,6 +787,30 @@ const WhatToDoNow = () => {
                   </div>
                 </div>
               </div>
+
+              {/* معلومات التاريخ */}
+              {(selectedVerse.gregorianDate || selectedVerse.hijriDate) && (
+                <div className="bg-purple-900/20 rounded-lg p-4 border border-purple-400/30">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
+                    {selectedVerse.gregorianDate && (
+                      <div>
+                        <div className="text-xs sm:text-sm text-purple-300 mb-1">التاريخ الميلادي</div>
+                        <div className="text-base sm:text-lg font-bold text-purple-100">
+                          {selectedVerse.gregorianDate.year}/{selectedVerse.gregorianDate.month}/{selectedVerse.gregorianDate.day}
+                        </div>
+                      </div>
+                    )}
+                    {selectedVerse.hijriDate && (
+                      <div>
+                        <div className="text-xs sm:text-sm text-purple-300 mb-1">التاريخ الهجري</div>
+                        <div className="text-base sm:text-lg font-bold text-purple-100">
+                          {selectedVerse.hijriDate.year}/{selectedVerse.hijriDate.month}/{selectedVerse.hijriDate.day}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* معلومات الحساب */}
               <div className="bg-gradient-to-r from-indigo-900/30 to-purple-900/30 rounded-lg p-3 border border-indigo-400/30">
