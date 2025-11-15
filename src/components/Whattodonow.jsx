@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Clock, Star, TrendingUp, Lightbulb, AlertCircle, BookOpen, Sparkles, Zap } from 'lucide-react';
 import { getNumberInfo, getNearestNumberInfo, calculateNumberEnergy } from './../../Quranicnumbersdatabase';
 
-const WhatToDoNow = () => {
+const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [analysis, setAnalysis] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,7 +59,7 @@ const WhatToDoNow = () => {
 
   // ===== دوال التحليل =====
 
-  // حساب رقم الآية بناءً على النظام 19 والوقت والطاقة
+  // حساب رقم الآية بناءً على النظام 19 والوقت والطاقة والرقم المختار
   const calculateVerseNumber = (
     hours,
     minutes,
@@ -68,7 +68,9 @@ const WhatToDoNow = () => {
     blessedScore,
     recommendations,
     gregorianDate,
-    hijriDate
+    hijriDate,
+    selectedNumber = null,
+    selectedNumberInfo = null
   ) => {
     const TOTAL_VERSES = 6236; // إجمالي آيات القرآن
     const MAGIC_NUMBER = 19; // الرقم 19 المقدس
@@ -93,6 +95,45 @@ const WhatToDoNow = () => {
       });
     }
     
+    // حساب عامل من الرقم المختار (إذا كان موجوداً)
+    let selectedNumberFactor = 0;
+    if (selectedNumber && selectedNumberInfo) {
+      const numValue = Number(selectedNumber) || 0;
+      
+      // إذا كان الرقم المختار موجوداً في قاعدة البيانات
+      if (selectedNumberInfo.verses && selectedNumberInfo.verses.length > 0) {
+        // استخدام عدد الآيات المرتبطة بالرقم
+        const versesCount = selectedNumberInfo.verses.length;
+        selectedNumberFactor = numValue * versesCount * MAGIC_NUMBER;
+        
+        // إضافة عامل من الطاقة إذا كانت عالية
+        if (selectedNumberInfo.energy) {
+          const energyLevel = selectedNumberInfo.energy.level;
+          if (energyLevel === 'very_high' || energyLevel === 'divine') {
+            selectedNumberFactor += numValue * MAGIC_NUMBER * 3;
+          } else if (energyLevel === 'blessed' || energyLevel === 'high') {
+            selectedNumberFactor += numValue * MAGIC_NUMBER * 2;
+          } else {
+            selectedNumberFactor += numValue * MAGIC_NUMBER;
+          }
+        }
+        
+        // إذا كان الرقم من أرقام تسلا (3، 6، 9)
+        const numReduced = numValue > 9 ? numValue % 10 : numValue;
+        if ([3, 6, 9].includes(numReduced) || [3, 6, 9].includes(numValue)) {
+          selectedNumberFactor += numValue * MAGIC_NUMBER * 2;
+        }
+        
+        // إذا كان الرقم 7 (مبارك)
+        if (numValue === 7 || numReduced === 7) {
+          selectedNumberFactor += numValue * 7 * 3;
+        }
+      } else {
+        // إذا لم يكن موجوداً في قاعدة البيانات، استخدم القيمة مباشرة
+        selectedNumberFactor = numValue * MAGIC_NUMBER;
+      }
+    }
+    
     // حساب عوامل إضافية من الوقت
     const hourMinuteSum = hours + minutes;
     const minuteSecondSum = minutes + seconds;
@@ -112,7 +153,7 @@ const WhatToDoNow = () => {
     const combinedDateFactor = gregorianFactor + hijriFactor + (dateDifference * 11);
     
     // حساب رقم الآية النهائي باستخدام صيغة متقدمة
-    // الصيغة: (وقت × عوامل + تسلا × 19² + بركة × 7² + توصيات × 19) modulo 6236
+    // الصيغة: (وقت × عوامل + تسلا × 19² + بركة × 7² + توصيات × 19 + رقم مختار × 19) modulo 6236
     let verseNumber = (
       timeInSeconds +
       (timeInMinutes * 10) +
@@ -125,6 +166,7 @@ const WhatToDoNow = () => {
       teslaFactor +
       blessedFactor +
       recommendationsFactor +
+      selectedNumberFactor + // إضافة عامل الرقم المختار
       (MAGIC_NUMBER * 19) // عامل ثابت من النظام 19
     ) % TOTAL_VERSES;
     
@@ -140,6 +182,15 @@ const WhatToDoNow = () => {
       // إذا كانت الطاقة عالية، أضف تعديل طفيف
       verseNumber = (verseNumber + (teslaScore + blessedScore)) % TOTAL_VERSES;
       if (verseNumber === 0) verseNumber = TOTAL_VERSES;
+    }
+    
+    // تعديل إضافي إذا كان هناك رقم مختار
+    if (selectedNumber && selectedNumberInfo && selectedNumberInfo.energy) {
+      const energyLevel = selectedNumberInfo.energy.level;
+      if (energyLevel === 'very_high' || energyLevel === 'divine') {
+        verseNumber = (verseNumber + Number(selectedNumber) + 19) % TOTAL_VERSES;
+        if (verseNumber === 0) verseNumber = TOTAL_VERSES;
+      }
     }
     
     return Math.floor(verseNumber);
@@ -274,8 +325,8 @@ const WhatToDoNow = () => {
     // استخراج الأرقام
     const timeNumbers = extractNumbersFromTime(hours, minutes, seconds);
     
-    // تحليل الأرقام المستخرجة
-    const recommendations = analyzeNumbers(timeNumbers);
+    // تحليل الأرقام المستخرجة (مع إضافة الرقم المختار)
+    const recommendations = analyzeNumbers(timeNumbers, selectedNumber, selectedNumberInfo);
     
     // حساب طاقة الوقت
     const teslaEnergy = calculateTeslaEnergy(hours, minutes, seconds, timeNumbers);
@@ -307,7 +358,7 @@ const WhatToDoNow = () => {
       priority: priority
     });
     
-    // حساب رقم الآية وجلبها من API
+    // حساب رقم الآية وجلبها من API (مع الأخذ في الاعتبار الرقم المختار)
     const verseNumber = calculateVerseNumber(
       hours,
       minutes,
@@ -316,13 +367,15 @@ const WhatToDoNow = () => {
       teslaEnergy.blessedScore,
       recommendations,
       gregorianDate,
-      hijriDate
+      hijriDate,
+      selectedNumber,
+      selectedNumberInfo
     );
     
     fetchVerseFromAPI(verseNumber, { gregorianDate, hijriDate });
     
     setIsLoading(false);
-  }, [analysis]);
+  }, [analysis, selectedNumber, selectedNumberInfo]);
 
   // فحص التغيير الجوهري
   const checkSignificantChange = (newRecs, oldRecs, newEnergy, oldEnergy) => {
@@ -399,8 +452,8 @@ const WhatToDoNow = () => {
     return Array.from(numbers).filter(n => n >= 0 && n < 10000).sort((a, b) => b - a);
   };
 
-  // تحليل الأرقام
-  const analyzeNumbers = (numbers) => {
+  // تحليل الأرقام (مع إضافة الرقم المختار إذا كان موجوداً)
+  const analyzeNumbers = (numbers, selectedNumber = null, selectedNumberInfo = null) => {
     const recommendations = [];
     const priorities = {
       tesla: 10,
@@ -411,9 +464,23 @@ const WhatToDoNow = () => {
       large: 5
     };
     
-    for (const num of numbers) {
+    // إضافة الرقم المختار إلى قائمة الأرقام للتحليل
+    const numbersToAnalyze = [...numbers];
+    if (selectedNumber && selectedNumberInfo) {
+      const numValue = Number(selectedNumber) || 0;
+      if (numValue > 0 && !numbersToAnalyze.includes(numValue)) {
+        numbersToAnalyze.push(numValue);
+      }
+    }
+    
+    for (const num of numbersToAnalyze) {
       const info = getNumberInfo(num);
       const energy = calculateNumberEnergy(num);
+      
+      // إذا كان هذا الرقم هو الرقم المختار، أعطيه أولوية أعلى
+      const isSelected = selectedNumber && Number(selectedNumber) === num;
+      const basePriority = priorities[energy.classification] || 0;
+      const finalPriority = isSelected ? basePriority + 5 : basePriority; // إضافة 5 نقاط إضافية للرقم المختار
       
       if (info && info.verses && info.verses.length > 0) {
         const verse = selectBestVerse(info.verses, energy);
@@ -423,7 +490,8 @@ const WhatToDoNow = () => {
           significance: info.significance,
           generalAdvice: info.generalAdvice,
           energy: energy,
-          priority: priorities[energy.classification] || 0
+          priority: finalPriority,
+          isSelected: isSelected // علامة للرقم المختار
         });
       } else {
         const nearestInfo = getNearestNumberInfo(num);
@@ -437,7 +505,8 @@ const WhatToDoNow = () => {
             significance: nearestInfo.info.significance,
             generalAdvice: nearestInfo.info.generalAdvice,
             energy: energy,
-            priority: priorities[energy.classification] || 0
+            priority: finalPriority,
+            isSelected: isSelected
           });
         }
       }
@@ -750,6 +819,13 @@ const WhatToDoNow = () => {
             <p className="text-sm sm:text-base text-purple-200 mt-2">
               الآية رقم {selectedVerse.number} من أصل 6236 آية
             </p>
+            {selectedNumber && selectedNumberInfo && (
+              <div className="mt-3 p-3 bg-gradient-to-r from-yellow-900/40 to-orange-900/40 rounded-lg border border-yellow-400/50">
+                <p className="text-sm sm:text-base text-yellow-200 text-center">
+                  ⭐ هذه الآية تأثرت بالرقم المختار: <span className="font-bold text-yellow-300">{selectedNumber}</span> ({selectedNumberInfo.significance})
+                </p>
+              </div>
+            )}
           </div>
 
           {verseLoading ? (
@@ -863,14 +939,18 @@ const WhatToDoNow = () => {
               >
                 <div className="space-y-2 sm:space-y-3">
                   <div className="flex flex-col sm:flex-row items-start justify-between gap-2 sm:gap-0">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center text-lg sm:text-xl font-bold shadow-lg ${
-                        rec.energy.classification === 'tesla' ? 'bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300 animate-pulse' :
-                        rec.energy.classification === 'blessed' ? 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300' :
-                        'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
-                      }`}>
-                        {rec.number}
-                      </div>
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center text-lg sm:text-xl font-bold shadow-lg relative ${
+                          rec.isSelected ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-white ring-4 ring-yellow-300 animate-pulse' :
+                          rec.energy.classification === 'tesla' ? 'bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300 animate-pulse' :
+                          rec.energy.classification === 'blessed' ? 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300' :
+                          'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                        }`}>
+                          {rec.number}
+                          {rec.isSelected && (
+                            <span className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">⭐</span>
+                          )}
+                        </div>
                       <div>
                         <h4 className="text-base sm:text-lg font-bold text-gray-800 dark:text-white">
                           {rec.significance}

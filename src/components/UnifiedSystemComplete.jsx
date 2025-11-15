@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Clock, Zap, BookOpen, Calculator, TrendingUp, Moon, Sun, Star, Sparkles } from "lucide-react";
+import { Clock, Zap, BookOpen, Calculator, TrendingUp, Moon, Sun, Star, Sparkles, ChevronDown } from "lucide-react";
 import WhatToDoNow from "./Whattodonow";
+import { quranicNumbersDatabase, getNumberInfo, calculateNumberEnergy } from "../../Quranicnumbersdatabase";
 
 const UnifiedSystemComplete = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -11,6 +12,8 @@ const UnifiedSystemComplete = () => {
   const [tesla369Times, setTesla369Times] = useState([]);
   const [quranNumbers, setQuranNumbers] = useState({});
   const [prayerTimes, setPrayerTimes] = useState(null); // Changed from {} to null
+  const [selectedNumber, setSelectedNumber] = useState(null); // Selected number from dropdown
+  const [selectedNumberInfo, setSelectedNumberInfo] = useState(null); // Info about selected number
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -33,7 +36,7 @@ const UnifiedSystemComplete = () => {
   // افتراض أن الدوال المساعدة (reduceToSingle، calculateFullPower، findBestIqamaWith7) مُعرفة مسبقًا
   // (تم إبقاؤها كما هي في منطق حساب الأرقام في الكود الأصلي).
 
-  const calculatePrayerTimes = async () => {
+  const calculatePrayerTimes = async (selectedNumber = null, selectedNumberInfo = null) => {
     // تحديد قيم افتراضية للمساعدة في حساب الأرقام لاحقًا
     let latitude = "31.9539"; // إحداثيات عمان الافتراضية
     let longitude = "35.9106";
@@ -126,8 +129,8 @@ const UnifiedSystemComplete = () => {
         // حساب الطاقة
         const power = calculateFullPower(h, m).power;
 
-        // أفضل أوقات الإقامة حيث يظهر رقم 7
-        const iqamaTimes = findBestIqamaWith7(h, m);
+        // أفضل أوقات الإقامة حيث يظهر رقم 7 أو الرقم المختار
+        const iqamaTimes = findBestIqamaWith7(h, m, selectedNumber, selectedNumberInfo);
 
         prayer.numbers = {
           hour: h,
@@ -198,7 +201,7 @@ const UnifiedSystemComplete = () => {
         const total = h + m;
         const totalReduced = reduceToSingle(total);
         const power = calculateFullPower(h, m).power;
-        const iqamaTimes = findBestIqamaWith7(h, m);
+        const iqamaTimes = findBestIqamaWith7(h, m, selectedNumber, selectedNumberInfo);
 
         prayer.numbers = {
           hour: h,
@@ -227,8 +230,8 @@ const UnifiedSystemComplete = () => {
     }
   };
 
-  // 🎯 إيجاد أفضل أوقات الإقامة حيث يظهر رقم 7
-  const findBestIqamaWith7 = (prayerHour, prayerMinute) => {
+  // 🎯 إيجاد أفضل أوقات الإقامة حيث يظهر رقم 7 أو الرقم المختار
+  const findBestIqamaWith7 = (prayerHour, prayerMinute, selectedNumber = null, selectedNumberInfo = null) => {
     const suggestions = [];
 
     // نبحث في الدقائق من 5 إلى 30 دقيقة بعد الأذان
@@ -258,6 +261,54 @@ const UnifiedSystemComplete = () => {
       const has7InReduced = [hReduced, mReduced, totalReduced].includes(7);
       const has7InDigits = h.toString().includes("7") || m.toString().includes("7");
 
+      // نبحث عن ظهور الرقم المختار (إذا كان موجوداً)
+      let hasSelectedNumber = false;
+      let selectedNumberScore = 0;
+      let selectedNumberReasons = [];
+      
+      if (selectedNumber && selectedNumberInfo) {
+        const numValue = Number(selectedNumber) || 0;
+        const numReduced = numValue > 9 ? reduceToSingle(numValue) : numValue;
+        
+        // البحث عن الرقم في الأرقام الكاملة
+        if ([h, m, total].includes(numValue)) {
+          hasSelectedNumber = true;
+          selectedNumberScore += 8; // نقاط أعلى للرقم المختار
+          if (h === numValue) selectedNumberReasons.push(`الساعة ${numValue} (رقم مختار)`);
+          if (m === numValue) selectedNumberReasons.push(`الدقيقة ${numValue} (رقم مختار)`);
+          if (total === numValue) selectedNumberReasons.push(`المجموع ${numValue} (رقم مختار)`);
+        }
+        
+        // البحث عن الرقم في الأرقام المختزلة
+        if ([hReduced, mReduced, totalReduced].includes(numReduced) || [hReduced, mReduced, totalReduced].includes(numValue)) {
+          hasSelectedNumber = true;
+          selectedNumberScore += 6;
+          if (hReduced === numReduced || hReduced === numValue) selectedNumberReasons.push(`اختزال الساعة ${numReduced} (رقم مختار)`);
+          if (mReduced === numReduced || mReduced === numValue) selectedNumberReasons.push(`اختزال الدقيقة ${numReduced} (رقم مختار)`);
+          if (totalReduced === numReduced || totalReduced === numValue) selectedNumberReasons.push(`اختزال المجموع ${numReduced} (رقم مختار)`);
+        }
+        
+        // البحث عن الرقم في الأرقام الفردية
+        const hStr = h.toString();
+        const mStr = m.toString();
+        if (hStr.includes(selectedNumber) || mStr.includes(selectedNumber)) {
+          hasSelectedNumber = true;
+          selectedNumberScore += 4;
+          selectedNumberReasons.push(`يحتوي على الرقم المختار ${selectedNumber}`);
+        }
+        
+        // إذا كان الرقم المختار من أرقام تسلا (3، 6، 9) أو 7، أضف نقاط إضافية
+        if ([3, 6, 9].includes(numReduced) || [3, 6, 9].includes(numValue)) {
+          selectedNumberScore += 2;
+          selectedNumberReasons.push(`⚡ رقم تسلا مختار`);
+        }
+        
+        if (numValue === 7 || numReduced === 7) {
+          selectedNumberScore += 3;
+          selectedNumberReasons.push(`✨ رقم مبارك مختار`);
+        }
+      }
+
       let score = 0;
       let reasons = [];
 
@@ -280,6 +331,10 @@ const UnifiedSystemComplete = () => {
         reasons.push("يحتوي على رقم 7");
       }
 
+      // إضافة نقاط الرقم المختار
+      score += selectedNumberScore;
+      reasons = [...selectedNumberReasons, ...reasons];
+
       // نقاط إضافية للأوقات المثالية (10، 15، 20 دقيقة)
       if ([10, 15, 20].includes(addMinutes)) {
         score += 1;
@@ -288,7 +343,8 @@ const UnifiedSystemComplete = () => {
       // حساب طاقة الوقت
       const power = calculateFullPower(h, m).power;
 
-      if (score > 0 || power >= 6) {
+      // إضافة الأوقات التي تحتوي على الرقم المختار أو رقم 7 أو طاقة عالية
+      if (score > 0 || power >= 6 || hasSelectedNumber) {
         suggestions.push({
           hour: h,
           minute: m,
@@ -299,14 +355,23 @@ const UnifiedSystemComplete = () => {
           score,
           power,
           reasons: reasons.join(" + "),
-          has7: score > 0,
+          has7: has7InNumbers || has7InReduced || has7InDigits,
+          hasSelectedNumber: hasSelectedNumber,
+          selectedNumber: selectedNumber
         });
       }
     }
 
-    // ترتيب حسب النقاط ثم الطاقة
+    // ترتيب حسب النقاط ثم الطاقة (الأوقات التي تحتوي على الرقم المختار تأتي أولاً)
     suggestions.sort((a, b) => {
+      // أولوية للرقم المختار
+      if (a.hasSelectedNumber && !b.hasSelectedNumber) return -1;
+      if (!a.hasSelectedNumber && b.hasSelectedNumber) return 1;
+      
+      // ثم حسب النقاط
       if (b.score !== a.score) return b.score - a.score;
+      
+      // ثم حسب الطاقة
       return b.power - a.power;
     });
 
@@ -877,25 +942,97 @@ const UnifiedSystemComplete = () => {
     };
   };
 
+  // Get all available numbers from database
+  const getAvailableNumbers = () => {
+    return Object.keys(quranicNumbersDatabase).sort((a, b) => {
+      // Sort numeric keys first, then text keys
+      const aIsNum = !isNaN(a);
+      const bIsNum = !isNaN(b);
+      if (aIsNum && bIsNum) return Number(a) - Number(b);
+      if (aIsNum) return -1;
+      if (bIsNum) return 1;
+      return a.localeCompare(b);
+    });
+  };
+
+  // Handle number selection change
+  useEffect(() => {
+    if (selectedNumber) {
+      const info = getNumberInfo(selectedNumber);
+      if (info) {
+        setSelectedNumberInfo({
+          number: selectedNumber,
+          ...info,
+          energy: calculateNumberEnergy(Number(selectedNumber) || 0)
+        });
+      } else {
+        setSelectedNumberInfo(null);
+      }
+    } else {
+      setSelectedNumberInfo(null);
+    }
+  }, [selectedNumber]);
+
   useEffect(() => {
     const h = currentTime.getHours();
     const m = currentTime.getMinutes();
-    setAnalysis(calculateFullPower(h, m));
+    
+    // If a number is selected, modify calculations to incorporate it
+    let modifiedAnalysis = calculateFullPower(h, m);
+    
+    if (selectedNumber && selectedNumberInfo) {
+      // Modify analysis based on selected number
+      const numValue = Number(selectedNumber) || 0;
+      const numReduced = reduceToSingle(numValue);
+      
+      // Add energy from selected number
+      if (selectedNumberInfo.energy) {
+        const energyLevel = selectedNumberInfo.energy.level;
+        if (energyLevel === 'very_high' || energyLevel === 'divine') {
+          modifiedAnalysis.power += 5;
+          modifiedAnalysis.reasons.push(`🌟 رقم مختار: ${selectedNumber} (${selectedNumberInfo.significance})`);
+        } else if (energyLevel === 'blessed' || energyLevel === 'high') {
+          modifiedAnalysis.power += 3;
+          modifiedAnalysis.reasons.push(`✨ رقم مختار: ${selectedNumber} (${selectedNumberInfo.significance})`);
+        } else {
+          modifiedAnalysis.power += 1;
+          modifiedAnalysis.reasons.push(`📖 رقم مختار: ${selectedNumber}`);
+        }
+      }
+      
+      // Check if selected number is Tesla number
+      if ([3, 6, 9].includes(numReduced) || [3, 6, 9].includes(numValue)) {
+        modifiedAnalysis.power += 2;
+        modifiedAnalysis.reasons.push(`⚡ رقم تسلا: ${selectedNumber}`);
+      }
+      
+      // Check if selected number is 7 (blessed)
+      if (numValue === 7 || numReduced === 7) {
+        modifiedAnalysis.power += 3;
+        modifiedAnalysis.reasons.push(`✨ رقم مبارك: ${selectedNumber}`);
+      }
+      
+      // Update isPerfect and isSuper flags
+      modifiedAnalysis.isPerfect = modifiedAnalysis.power >= 10;
+      modifiedAnalysis.isSuper = modifiedAnalysis.power >= 15;
+    }
+    
+    setAnalysis(modifiedAnalysis);
     setNextPowerTimes(findNextPowerTimes());
     setCycles(calculateCycles());
     setQuranMiracles(calculateQuranMiracles());
     setTesla369Times(findNext369Times());
     setQuranNumbers(getQuranStats());
 
-    // جلب مواقيت الصلاة الحية
-    calculatePrayerTimes()
+    // جلب مواقيت الصلاة الحية (مع الأخذ في الاعتبار الرقم المختار)
+    calculatePrayerTimes(selectedNumber, selectedNumberInfo)
       .then((prayers) => {
         setPrayerTimes(prayers);
       })
       .catch((error) => {
         console.error("Error setting prayer times:", error);
       });
-  }, [currentTime]);
+  }, [currentTime, selectedNumber, selectedNumberInfo]);
 
   const formatTime = (h, m) => {
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
@@ -920,8 +1057,29 @@ const UnifiedSystemComplete = () => {
   const h = currentTime.getHours();
   const m = currentTime.getMinutes();
   const total = h + m;
-  const meanings = getQuranMeaning(h, m, total);
-  const decisions = getDecisions(meanings, h, m, analysis.power);
+  let meanings = getQuranMeaning(h, m, total);
+  let decisions = getDecisions(meanings, h, m, analysis.power);
+  
+  // If a number is selected, add its meanings to the existing ones
+  if (selectedNumber && selectedNumberInfo && selectedNumberInfo.verses) {
+    const selectedMeanings = selectedNumberInfo.verses.slice(0, 2).map((verse, idx) => ({
+      num: selectedNumber,
+      title: selectedNumberInfo.significance,
+      verse: `${verse.text} (${verse.surah}:${verse.ayah})`,
+      icon: "⭐",
+      details: verse.meaning,
+      action: verse.action,
+      allVerses: [verse.text]
+    }));
+    meanings = [...selectedMeanings, ...meanings];
+    
+    // Add decisions based on selected number
+    const selectedDecisions = [
+      `⭐ ${selectedNumberInfo.generalAdvice}`,
+      ...selectedNumberInfo.verses.slice(0, 2).map(v => `📖 ${v.action}: ${v.recommendation}`)
+    ];
+    decisions = [...selectedDecisions, ...decisions].slice(0, 10);
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 text-white p-4 md:p-8" dir="rtl">
@@ -931,6 +1089,107 @@ const UnifiedSystemComplete = () => {
           <h1 className="text-3xl md:text-5xl font-bold mb-2 bg-gradient-to-r from-yellow-400 via-purple-400 to-blue-400 bg-clip-text text-transparent">النظام المتين الكامل</h1>
           <p className="text-purple-300 text-sm md:text-base">﴿وَلِتَعْلَمُوا عَدَدَ السِّنِينَ وَالْحِسَابَ﴾</p>
           <p className="text-blue-300 text-xs md:text-sm mt-1">الإعجاز العددي القرآني × نظرية تسلا 3-6-9</p>
+        </div>
+
+        {/* Number Selection Dropdown */}
+        <div className="mb-6 bg-gradient-to-r from-purple-900/40 to-blue-900/40 backdrop-blur-lg rounded-2xl p-4 md:p-6 border-2 border-purple-400/50">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex-1">
+              <label htmlFor="number-select" className="block text-lg font-bold text-purple-300 mb-2 flex items-center gap-2">
+                <BookOpen className="w-5 h-5" />
+                اختر رقم من قاعدة البيانات القرآنية:
+              </label>
+              <div className="relative w-full md:w-auto min-w-[200px]">
+                <select
+                  id="number-select"
+                  value={selectedNumber || ""}
+                  onChange={(e) => setSelectedNumber(e.target.value || null)}
+                  className="w-full bg-slate-800 text-white border-2 border-purple-400/50 rounded-lg px-4 py-3 pr-10 text-lg font-semibold focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/50 cursor-pointer appearance-none"
+                >
+                <option value="">-- اختر رقم --</option>
+                {getAvailableNumbers().map((num) => {
+                  const info = getNumberInfo(num);
+                  const displayName = info ? `${num} - ${info.significance}` : num;
+                  return (
+                    <option key={num} value={num}>
+                      {displayName}
+                    </option>
+                  );
+                })}
+                </select>
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                  <ChevronDown className="w-5 h-5 text-purple-400" />
+                </div>
+              </div>
+              {selectedNumber && (
+                <button
+                  onClick={() => setSelectedNumber(null)}
+                  className="mt-2 md:mt-0 md:mr-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                >
+                  إلغاء الاختيار
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Display Selected Number Info */}
+          {selectedNumberInfo && (
+            <div className="mt-4 p-4 bg-gradient-to-r from-purple-800/30 to-blue-800/30 rounded-lg border border-purple-400/30">
+              <div className="flex items-start justify-between mb-3">
+                <h3 className="text-xl font-bold text-yellow-300 flex items-center gap-2">
+                  <Star className="w-6 h-6" />
+                  معلومات الرقم المختار: {selectedNumber}
+                </h3>
+                <div className={`px-3 py-1 rounded-full text-sm font-bold ${
+                  selectedNumberInfo.energy?.level === 'very_high' || selectedNumberInfo.energy?.level === 'divine' 
+                    ? 'bg-yellow-500/30 text-yellow-300' 
+                    : selectedNumberInfo.energy?.level === 'blessed' || selectedNumberInfo.energy?.level === 'high'
+                    ? 'bg-green-500/30 text-green-300'
+                    : 'bg-blue-500/30 text-blue-300'
+                }`}>
+                  {selectedNumberInfo.energy?.description || 'طاقة متوازنة'}
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="text-purple-200">
+                  <span className="font-bold text-purple-300">الدلالة:</span> {selectedNumberInfo.significance}
+                </div>
+                <div className="text-blue-200">
+                  <span className="font-bold text-blue-300">النصيحة العامة:</span> {selectedNumberInfo.generalAdvice}
+                </div>
+                
+                {selectedNumberInfo.verses && selectedNumberInfo.verses.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-sm font-bold text-purple-300 mb-2">الآيات المرتبطة:</div>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {selectedNumberInfo.verses.slice(0, 3).map((verse, idx) => (
+                        <div key={idx} className="bg-purple-900/30 p-3 rounded-lg border border-purple-400/20">
+                          <div className="text-sm text-purple-200 mb-1">
+                            <span className="font-bold">{verse.surah}</span> - آية {verse.ayah}
+                          </div>
+                          <div className="text-base text-white font-arabic leading-relaxed mb-2">
+                            {verse.text}
+                          </div>
+                          <div className="text-xs text-purple-300 mb-1">
+                            <span className="font-bold">المعنى:</span> {verse.meaning}
+                          </div>
+                          <div className="text-xs text-blue-300">
+                            <span className="font-bold">التوصية:</span> {verse.recommendation}
+                          </div>
+                          <div className="mt-2">
+                            <span className="inline-block px-2 py-1 bg-cyan-900/50 text-cyan-200 rounded text-xs font-semibold">
+                              {verse.action}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -981,7 +1240,7 @@ const UnifiedSystemComplete = () => {
                       {/* العنوان الرئيسي */}
                       <div className="p-4 rounded-lg bg-gradient-to-r from-green-900/40 to-emerald-900/40 border-2 border-green-400/50">
                         {/* الربط بالآيات القرآنية - الجزء الجديد */}
-                        <WhatToDoNow />
+                        <WhatToDoNow selectedNumber={selectedNumber} selectedNumberInfo={selectedNumberInfo} />
                       </div>
                     </div>
                   )}
@@ -1373,23 +1632,47 @@ const UnifiedSystemComplete = () => {
                         </div>
                       )}
 
-                      {/* أفضل أوقات الإقامة مع رقم 7 */}
+                      {/* أفضل أوقات الإقامة مع رقم 7 أو الرقم المختار */}
                       {prayer.iqama && prayer.iqama.length > 0 && (
                         <div className="p-3 bg-gradient-to-r from-yellow-900/40 to-orange-900/40 rounded-lg border border-yellow-400/50">
-                          <div className="text-sm font-bold text-yellow-200 mb-3 text-center">⭐ أفضل أوقات الإقامة (رقم 7 ظاهر)</div>
+                          <div className="text-sm font-bold text-yellow-200 mb-3 text-center">
+                            ⭐ أفضل أوقات الإقامة
+                            {selectedNumber && selectedNumberInfo && (
+                              <span className="block text-xs text-yellow-300 mt-1">
+                                (رقم {selectedNumber} ظاهر)
+                              </span>
+                            )}
+                            {!selectedNumber && (
+                              <span className="block text-xs text-yellow-300 mt-1">(رقم 7 ظاهر)</span>
+                            )}
+                          </div>
                           <div className="space-y-2 max-h-80 overflow-y-auto">
                             {prayer.iqama.slice(0, 5).map((iqama, idx) => (
-                              <div key={idx} className={`p-2 rounded-lg border ${iqama.has7 ? "bg-yellow-900/50 border-yellow-400/60" : "bg-green-900/30 border-green-400/30"}`}>
+                              <div key={idx} className={`p-2 rounded-lg border ${
+                                iqama.hasSelectedNumber 
+                                  ? "bg-gradient-to-r from-purple-900/60 to-pink-900/60 border-purple-400/70 ring-2 ring-purple-300/50" 
+                                  : iqama.has7 
+                                  ? "bg-yellow-900/50 border-yellow-400/60" 
+                                  : "bg-green-900/30 border-green-400/30"
+                              }`}>
                                 <div className="flex justify-between items-center mb-1">
-                                  <span className="font-bold text-yellow-100">
+                                  <span className={`font-bold ${
+                                    iqama.hasSelectedNumber ? "text-purple-100" : "text-yellow-100"
+                                  }`}>
                                     {iqama.hour.toString().padStart(2, "0")}:{iqama.minute.toString().padStart(2, "0")}
                                   </span>
                                   <span className="text-xs text-yellow-200">بعد {iqama.afterAdhan} دقيقة</span>
                                 </div>
 
-                                {iqama.has7 && (
+                                {(iqama.has7 || iqama.hasSelectedNumber) && (
                                   <div className="text-xs mb-1">
-                                    <span className="text-yellow-300 font-bold">🎯 {iqama.reasons}</span>
+                                    <span className={`font-bold ${
+                                      iqama.hasSelectedNumber ? "text-purple-300" : "text-yellow-300"
+                                    }`}>
+                                      {iqama.hasSelectedNumber && "⭐ "}
+                                      {iqama.has7 && "🎯 "}
+                                      {iqama.reasons}
+                                    </span>
                                   </div>
                                 )}
 
@@ -1397,6 +1680,9 @@ const UnifiedSystemComplete = () => {
                                   {iqama.hReduced === 7 && <span className="mr-1">✨ س→7</span>}
                                   {iqama.mReduced === 7 && <span className="mr-1">✨ د→7</span>}
                                   {iqama.totalReduced === 7 && <span className="mr-1">✨ ج→7</span>}
+                                  {iqama.hasSelectedNumber && iqama.selectedNumber && (
+                                    <span className="mr-1">⭐ رقم مختار: {iqama.selectedNumber}</span>
+                                  )}
                                   <span className="mr-2">⚡ طاقة: {iqama.power}</span>
                                 </div>
                               </div>
