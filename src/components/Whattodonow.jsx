@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Clock, Star, TrendingUp, Lightbulb, AlertCircle, BookOpen, Sparkles, Zap } from 'lucide-react';
+import { Clock, Star, TrendingUp, Lightbulb, AlertCircle, BookOpen, Sparkles, Zap, Pin, PinOff, ChevronDown, ChevronUp } from 'lucide-react';
 import { getNumberInfo, getNearestNumberInfo, calculateNumberEnergy } from './../../Quranicnumbersdatabase';
 
 const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
@@ -10,6 +10,10 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
   const [lastSignificantChange, setLastSignificantChange] = useState(null);
   const [selectedVerse, setSelectedVerse] = useState(null);
   const [verseLoading, setVerseLoading] = useState(false);
+  const [pinnedVerse, setPinnedVerse] = useState(null); // الآية المثبتة
+  const [tafseer, setTafseer] = useState(null); // التفسير
+  const [tafseerLoading, setTafseerLoading] = useState(false);
+  const [showTafseer, setShowTafseer] = useState(false); // إظهار/إخفاء التفسير
   
   // حالات التنبيه
   const [alerts, setAlerts] = useState({
@@ -217,7 +221,7 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
         const verseData = data.data[0]; // نص الآية (quran-uthmani)
         const translationData = data.data.length > 1 ? data.data[1] : null; // الترجمة إن وجدت
         
-        setSelectedVerse({
+        const verse = {
           number: verseNumber,
           text: verseData.text,
           surah: verseData.surah?.name || 'غير معروف',
@@ -226,7 +230,12 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
           translation: translationData?.text || null,
           gregorianDate: meta.gregorianDate || null,
           hijriDate: meta.hijriDate || null
-        });
+        };
+        
+        setSelectedVerse(verse);
+        
+        // إذا لم تكن هناك آية مثبتة، أو إذا كانت الآية المثبتة مختلفة، لا نغيرها
+        // (يتم التثبيت يدوياً فقط)
       } else {
         throw new Error('Invalid API response format');
       }
@@ -248,6 +257,141 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
       setVerseLoading(false);
     }
   };
+
+  // جلب التفسير من API (القرطبي فقط)
+  const fetchTafseer = async (surahNumber, ayahNumber) => {
+    if (!surahNumber || !ayahNumber) return;
+    
+    setTafseerLoading(true);
+    try {
+      // محاولة 1: استخدام API من alquran.cloud
+      const apiUrl = `https://api.alquran.cloud/v1/ayah/${surahNumber}:${ayahNumber}/ar.qurtubi`;
+      
+      const response = await fetch(apiUrl, {
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // التحقق من بنية البيانات المختلفة
+        if (data.code === 200 && data.data) {
+          // إذا كانت البيانات في data.data.text
+          if (data.data.text) {
+            setTafseer({
+              text: data.data.text,
+              author: 'القرطبي',
+              type: 'qurtubi'
+            });
+            return;
+          }
+          // إذا كانت البيانات في data.data[0].text
+          if (data.data.length > 0 && data.data[0].text) {
+            setTafseer({
+              text: data.data[0].text,
+              author: 'القرطبي',
+              type: 'qurtubi'
+            });
+            return;
+          }
+        }
+      }
+      
+      // محاولة 2: استخدام API بديل من quran-api.com
+      const alternativeUrl = `https://quran-api.com/tafseer/qurtubi/${surahNumber}/${ayahNumber}`;
+      
+      const altResponse = await fetch(alternativeUrl, {
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (altResponse.ok) {
+        const altData = await altResponse.json();
+        if (altData.text || altData.tafseer) {
+          setTafseer({
+            text: altData.text || altData.tafseer,
+            author: 'القرطبي',
+            type: 'qurtubi'
+          });
+          return;
+        }
+      }
+      
+      // إذا فشلت جميع المحاولات، نعرض روابط مباشرة
+      const tafseerLinks = {
+        altafsir: `https://www.altafsir.com/Tafasir.asp?tSoraNo=${surahNumber}&tAyahNo=${ayahNumber}&tTafsirNo=5`,
+        islamweb: `https://www.islamweb.net/quran/index.php?page=showquran&sura=${surahNumber}&aya=${ayahNumber}`,
+        quran: `https://quran.ksu.edu.sa/tafseer/qurtubi/sura${surahNumber}-aya${ayahNumber}.html`
+      };
+      
+      setTafseer({
+        text: `التفسير غير متاح حالياً من API. يرجى استخدام الروابط المباشرة أدناه للوصول إلى تفسير القرطبي.`,
+        author: 'القرطبي',
+        type: 'qurtubi',
+        error: true,
+        links: tafseerLinks
+      });
+      
+    } catch (error) {
+      console.error('Error fetching tafseer:', error);
+      
+      // حتى في حالة الخطأ، نعرض الروابط
+      const tafseerLinks = {
+        altafsir: `https://www.altafsir.com/Tafasir.asp?tSoraNo=${surahNumber}&tAyahNo=${ayahNumber}&tTafsirNo=5`,
+        islamweb: `https://www.islamweb.net/quran/index.php?page=showquran&sura=${surahNumber}&aya=${ayahNumber}`,
+        quran: `https://quran.ksu.edu.sa/tafseer/qurtubi/sura${surahNumber}-aya${ayahNumber}.html`
+      };
+      
+      setTafseer({
+        text: 'حدث خطأ في تحميل التفسير. يرجى استخدام الروابط المباشرة أدناه.',
+        author: 'القرطبي',
+        type: 'qurtubi',
+        error: true,
+        links: tafseerLinks
+      });
+    } finally {
+      setTafseerLoading(false);
+    }
+  };
+
+  // تثبيت/إلغاء تثبيت الآية
+  const togglePinVerse = () => {
+    if (pinnedVerse && pinnedVerse.number === selectedVerse?.number) {
+      // إلغاء التثبيت
+      setPinnedVerse(null);
+      localStorage.removeItem('pinnedVerse');
+    } else if (selectedVerse && !selectedVerse.error) {
+      // تثبيت الآية
+      const verseToPin = {
+        ...selectedVerse,
+        pinnedAt: new Date().toISOString()
+      };
+      setPinnedVerse(verseToPin);
+      localStorage.setItem('pinnedVerse', JSON.stringify(verseToPin));
+    }
+  };
+
+  // تحميل الآية المثبتة من localStorage عند التحميل
+  useEffect(() => {
+    const savedPinnedVerse = localStorage.getItem('pinnedVerse');
+    if (savedPinnedVerse) {
+      try {
+        setPinnedVerse(JSON.parse(savedPinnedVerse));
+      } catch (error) {
+        console.error('Error loading pinned verse:', error);
+      }
+    }
+  }, []);
+
+  // جلب التفسير عند تغيير الآية
+  useEffect(() => {
+    if (showTafseer && selectedVerse && !selectedVerse.error && selectedVerse.surahNumber && selectedVerse.ayah) {
+      fetchTafseer(selectedVerse.surahNumber, selectedVerse.ayah);
+    }
+  }, [showTafseer, selectedVerse?.surahNumber, selectedVerse?.ayah]);
 
   // تحليل سريع - يفحص التغييرات البسيطة فقط
   const quickAnalysis = useCallback((time) => {
@@ -808,14 +952,70 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
         </div>
       </div>
 
+      {/* الآية المثبتة (إن وجدت) */}
+      {pinnedVerse && pinnedVerse.number !== selectedVerse?.number && (
+        <div className="bg-gradient-to-br from-yellow-900/40 via-orange-900/40 to-red-900/40 backdrop-blur-lg rounded-2xl p-4 sm:p-6 border-2 border-yellow-400/50 shadow-xl mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl sm:text-2xl font-bold text-yellow-300 flex items-center gap-2">
+              <Pin className="w-6 h-6 sm:w-8 sm:h-8 fill-current" />
+              📌 الآية المثبتة
+            </h3>
+            <button
+              onClick={() => {
+                setPinnedVerse(null);
+                localStorage.removeItem('pinnedVerse');
+              }}
+              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+            >
+              <PinOff className="w-4 h-4" />
+              إلغاء التثبيت
+            </button>
+          </div>
+          <div className="bg-gradient-to-r from-yellow-800/30 to-orange-800/30 p-4 sm:p-6 rounded-lg border border-yellow-400/30">
+            <p className="text-2xl sm:text-3xl md:text-4xl text-white leading-loose text-center font-arabic mb-4">
+              {pinnedVerse.text}
+            </p>
+            <div className="text-center text-yellow-200">
+              {pinnedVerse.surah} - آية {pinnedVerse.ayah}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* الآية المختارة بناءً على النظام 19 */}
       {selectedVerse && (
-        <div className="bg-gradient-to-br from-purple-900/40 via-blue-900/40 to-indigo-900/40 backdrop-blur-lg rounded-2xl p-4 sm:p-6 border-2 border-purple-400/50 shadow-xl">
+        <div className={`bg-gradient-to-br from-purple-900/40 via-blue-900/40 to-indigo-900/40 backdrop-blur-lg rounded-2xl p-4 sm:p-6 border-2 ${pinnedVerse && pinnedVerse.number === selectedVerse.number ? 'border-yellow-400/70 ring-2 ring-yellow-300/50' : 'border-purple-400/50'} shadow-xl`}>
           <div className="text-center mb-4">
-            <h3 className="text-xl sm:text-2xl font-bold text-purple-300 flex items-center justify-center gap-2">
-              <BookOpen className="w-6 h-6 sm:w-8 sm:h-8" />
-              📖 الآية المختارة لك الآن (بناءً على النظام 19)
-            </h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xl sm:text-2xl font-bold text-purple-300 flex items-center justify-center gap-2 flex-1">
+                <BookOpen className="w-6 h-6 sm:w-8 sm:h-8" />
+                📖 الآية المختارة لك الآن (بناءً على النظام 19)
+                {pinnedVerse && pinnedVerse.number === selectedVerse.number && (
+                  <Pin className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-400 fill-current" />
+                )}
+              </h3>
+              <button
+                onClick={togglePinVerse}
+                className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 ${
+                  pinnedVerse && pinnedVerse.number === selectedVerse.number
+                    ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                    : 'bg-purple-600 hover:bg-purple-700 text-white'
+                }`}
+                title={pinnedVerse && pinnedVerse.number === selectedVerse.number ? 'إلغاء التثبيت' : 'تثبيت الآية'}
+              >
+                {pinnedVerse && pinnedVerse.number === selectedVerse.number ? (
+                  <>
+                    <PinOff className="w-4 h-4" />
+                    إلغاء التثبيت
+                  </>
+                ) : (
+                  <>
+                    <Pin className="w-4 h-4" />
+                    تثبيت
+                  </>
+                )}
+              </button>
+            </div>
             <p className="text-sm sm:text-base text-purple-200 mt-2">
               الآية رقم {selectedVerse.number} من أصل 6236 آية
             </p>
@@ -900,121 +1100,112 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                   </div>
                 </div>
               </div>
+
+              {/* التفسير */}
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-lg font-bold text-purple-300 flex items-center gap-2">
+                    <BookOpen className="w-5 h-5" />
+                    📚 تفسير القرطبي
+                  </h4>
+                  <button
+                    onClick={() => {
+                      setShowTafseer(!showTafseer);
+                      if (!showTafseer && selectedVerse && !selectedVerse.error) {
+                        fetchTafseer(selectedVerse.surahNumber, selectedVerse.ayah);
+                      }
+                    }}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+                  >
+                    {showTafseer ? (
+                      <>
+                        <ChevronUp className="w-4 h-4" />
+                        إخفاء التفسير
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4" />
+                        عرض التفسير
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {showTafseer && (
+                  <div className="bg-gradient-to-r from-purple-800/40 to-indigo-800/40 rounded-lg p-4 border border-purple-400/30">
+                    {tafseerLoading ? (
+                      <div className="flex items-center justify-center p-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+                        <span className="mr-3 text-purple-300">جاري تحميل التفسير...</span>
+                      </div>
+                    ) : tafseer ? (
+                      <div>
+                        <div className="mb-3 flex items-center justify-between">
+                          <h5 className="text-base font-bold text-purple-200">
+                            تفسير {tafseer.author}
+                          </h5>
+                          {tafseer.error && (
+                            <span className="text-xs text-yellow-300 bg-yellow-900/30 px-2 py-1 rounded">
+                              ⚠️ غير متاح
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm sm:text-base text-gray-200 leading-relaxed font-arabic bg-purple-900/30 p-4 rounded-lg border border-purple-500/20">
+                          {tafseer.text}
+                        </div>
+                        {tafseer.error && tafseer.links && (
+                          <div className="mt-3 text-xs text-purple-300 bg-purple-900/30 p-3 rounded border border-purple-500/20">
+                            <p className="mb-2 font-bold">💡 روابط مباشرة لتفسير {tafseer.author}:</p>
+                            <ul className="list-none mt-2 space-y-2">
+                              <li>
+                                <a 
+                                  href={tafseer.links.altafsir} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="text-blue-300 hover:text-blue-200 hover:underline flex items-center gap-2 bg-blue-900/30 px-3 py-2 rounded border border-blue-500/30"
+                                >
+                                  <BookOpen className="w-4 h-4" />
+                                  موقع التفسير (altafsir.com)
+                                </a>
+                              </li>
+                              <li>
+                                <a 
+                                  href={tafseer.links.islamweb} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="text-blue-300 hover:text-blue-200 hover:underline flex items-center gap-2 bg-blue-900/30 px-3 py-2 rounded border border-blue-500/30"
+                                >
+                                  <BookOpen className="w-4 h-4" />
+                                  إسلام ويب (islamweb.net)
+                                </a>
+                              </li>
+                              <li>
+                                <a 
+                                  href={tafseer.links.quran} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="text-blue-300 hover:text-blue-200 hover:underline flex items-center gap-2 bg-blue-900/30 px-3 py-2 rounded border border-blue-500/30"
+                                >
+                                  <BookOpen className="w-4 h-4" />
+                                  القرآن الكريم (quran.ksu.edu.sa)
+                                </a>
+                              </li>
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center p-4 text-purple-300">
+                        اضغط على "عرض التفسير" لتحميل التفسير
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
       )}
-
-      {/* التوصيات */}
-      <div className="space-y-3 sm:space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 px-2">
-          <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-            <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
-            التوصيات القرآنية
-          </h3>
-          <div className="flex items-center gap-2">
-            {getPriorityIcon(analysis.priority)}
-            <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-              الأولوية: {
-                analysis.priority === 'urgent' ? 'عاجلة' :
-                analysis.priority === 'high' ? 'عالية' :
-                analysis.priority === 'medium' ? 'متوسطة' : 'عادية'
-              }
-            </span>
-          </div>
-        </div>
-
-        {analysis.recommendations.length === 0 ? (
-          <div className="bg-gray-100 dark:bg-gray-800 p-4 sm:p-6 rounded-xl text-center">
-            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300">
-              لا توجد توصيات خاصة في هذا الوقت
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:gap-4">
-            {analysis.recommendations.map((rec, index) => (
-              <div
-                key={index}
-                className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-xl shadow-lg border-r-4 border-purple-500 hover:shadow-2xl hover:scale-[1.02] transition-all duration-300"
-              >
-                <div className="space-y-2 sm:space-y-3">
-                  <div className="flex flex-col sm:flex-row items-start justify-between gap-2 sm:gap-0">
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center text-lg sm:text-xl font-bold shadow-lg relative ${
-                          rec.isSelected ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-white ring-4 ring-yellow-300 animate-pulse' :
-                          rec.energy.classification === 'tesla' ? 'bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300 animate-pulse' :
-                          rec.energy.classification === 'blessed' ? 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300' :
-                          'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
-                        }`}>
-                          {rec.number}
-                          {rec.isSelected && (
-                            <span className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">⭐</span>
-                          )}
-                        </div>
-                      <div>
-                        <h4 className="text-base sm:text-lg font-bold text-gray-800 dark:text-white">
-                          {rec.significance}
-                        </h4>
-                        {rec.isNearest && (
-                          <p className="text-xs sm:text-sm text-gray-500">
-                            (أقرب رقم لـ {rec.originalNumber})
-                          </p>
-                        )}
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {rec.energy.classification === 'tesla' && (
-                            <span className="inline-block px-2 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 text-xs rounded-full">
-                              ⚡ رقم تسلا
-                            </span>
-                          )}
-                          {rec.energy.classification === 'blessed' && (
-                            <span className="inline-block px-2 py-0.5 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 text-xs rounded-full">
-                              ✨ رقم مبارك
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${
-                      rec.verse.energy === 'high' || rec.verse.energy === 'powerful' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' :
-                      rec.verse.energy === 'warning' || rec.verse.energy === 'critical' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
-                      'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                    }`}>
-                      {rec.verse.action}
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 p-3 sm:p-5 rounded-lg shadow-inner">
-                    <p className="text-base sm:text-lg md:text-xl text-gray-800 dark:text-gray-200 leading-loose font-arabic text-center">
-                      {rec.verse.text}
-                    </p>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-2 sm:mt-3 text-center">
-                      {rec.verse.surah} - آية {rec.verse.ayah}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 bg-gray-50 dark:bg-gray-900/50 p-3 sm:p-4 rounded-lg">
-                    <div className="flex items-start gap-2">
-                      <span className="text-purple-600 dark:text-purple-400 font-bold text-xs sm:text-sm">📖 المعنى:</span>
-                      <span className="text-gray-700 dark:text-gray-300 text-xs sm:text-sm">{rec.verse.meaning}</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-purple-600 dark:text-purple-400 font-bold text-xs sm:text-sm">💡 التوصية:</span>
-                      <span className="text-gray-700 dark:text-gray-300 font-medium text-xs sm:text-sm">{rec.verse.recommendation}</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 p-3 sm:p-4 rounded-lg border-r-2 border-yellow-400">
-                    <p className="text-gray-700 dark:text-gray-300 flex items-start gap-2">
-                      <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                      <span className="text-xs sm:text-sm">{rec.generalAdvice}</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
       {/* الأرقام المستخرجة */}
       <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-4 sm:p-6 rounded-xl shadow-inner">

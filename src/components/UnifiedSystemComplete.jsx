@@ -1248,56 +1248,6 @@ const UnifiedSystemComplete = () => {
               </div>
             </div>
 
-            {/* Quranic Meanings */}
-            {meanings.length > 0 && (
-              <div className="bg-gradient-to-r from-blue-900/40 to-cyan-900/40 backdrop-blur-lg rounded-2xl p-4 md:p-6 border-2 border-blue-400/50">
-                <div className="flex items-center justify-between mb-4">
-                  <BookOpen className="text-blue-400" size={24} />
-                  <h2 className="text-xl font-bold text-blue-300">📖 الدلالة القرآنية للوقت</h2>
-                </div>
-
-                {meanings.map((meaning, i) => (
-                  <div key={i} className="mb-4 p-4 bg-white/10 rounded-lg border border-blue-300/30">
-                    <div className="flex items-start gap-3 mb-3">
-                      <span className="text-4xl">{meaning.icon}</span>
-                      <div className="flex-1">
-                        <div className="text-lg font-bold text-yellow-300 mb-2">
-                          {meaning.num} - {meaning.title}
-                        </div>
-                        <div className="text-sm text-blue-200 italic mb-2 leading-relaxed">"{meaning.verse}"</div>
-                        {meaning.details && <div className="text-xs text-gray-300 mb-2 bg-blue-900/30 rounded p-2">💡 {meaning.details}</div>}
-                        {meaning.action && (
-                          <div className="text-sm text-cyan-200 bg-cyan-900/30 rounded p-2 border border-cyan-400/30">
-                            🎯 <span className="font-bold">{meaning.action}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {decisions.length > 0 && (
-                  <div className="mt-4 p-4 bg-gradient-to-r from-cyan-900/40 to-blue-900/40 rounded-lg border-2 border-cyan-400/50">
-                    <div className="text-lg font-bold text-cyan-300 mb-3 flex items-center gap-2">
-                      <span className="text-2xl">🎯</span>
-                      قرارات مستوحاة من الآيات - اختر واحداً الآن:
-                    </div>
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                      {decisions.map((decision, i) => (
-                        <div
-                          key={i}
-                          className="flex items-start gap-2 text-sm bg-cyan-900/30 rounded p-3 border border-cyan-400/20 hover:bg-cyan-900/50 transition-colors cursor-pointer"
-                        >
-                          <span className="text-cyan-400 font-bold min-w-[24px]">{i + 1}.</span>
-                          <span className="text-gray-200 flex-1">{decision}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
           </div>
 
           {/* Sidebar */}
@@ -1402,6 +1352,58 @@ const UnifiedSystemComplete = () => {
                 </div>
               </div>
             </div>
+
+            {/* Quranic Meanings */}
+            {meanings.length > 0 && (
+              <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-4 border border-blue-500/20">
+                <div className="flex items-center justify-between mb-3">
+                  <BookOpen className="text-blue-400" size={20} />
+                  <h2 className="text-lg font-bold">📖 الدلالة القرآنية للوقت</h2>
+                </div>
+
+                <div className="space-y-3 max-h-[470px] overflow-y-auto">
+                  {meanings.map((meaning, i) => (
+                    <div key={i} className="p-3 bg-blue-900/30 rounded-lg border border-blue-300/30">
+                      <div className="flex items-start gap-2 mb-2">
+                        <span className="text-2xl">{meaning.icon}</span>
+                        <div className="flex-1">
+                          <div className="text-sm font-bold text-yellow-300 mb-1">
+                            {meaning.num} - {meaning.title}
+                          </div>
+                          <div className="text-xs text-blue-200 italic mb-2 leading-relaxed">"{meaning.verse}"</div>
+                          {meaning.details && <div className="text-xs text-gray-300 mb-2 bg-blue-900/30 rounded p-2">💡 {meaning.details}</div>}
+                          {meaning.action && (
+                            <div className="text-xs text-cyan-200 bg-cyan-900/30 rounded p-2 border border-cyan-400/30">
+                              🎯 <span className="font-bold">{meaning.action}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {decisions.length > 0 && (
+                    <div className="mt-3 p-3 bg-gradient-to-r from-cyan-900/40 to-blue-900/40 rounded-lg border border-cyan-400/50">
+                      <div className="text-sm font-bold text-cyan-300 mb-2 flex items-center gap-2">
+                        <span className="text-xl">🎯</span>
+                        قرارات مستوحاة من الآيات:
+                      </div>
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {decisions.map((decision, i) => (
+                          <div
+                            key={i}
+                            className="flex items-start gap-2 text-xs bg-cyan-900/30 rounded p-2 border border-cyan-400/20 hover:bg-cyan-900/50 transition-colors cursor-pointer"
+                          >
+                            <span className="text-cyan-400 font-bold min-w-[20px]">{i + 1}.</span>
+                            <span className="text-gray-200 flex-1">{decision}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
