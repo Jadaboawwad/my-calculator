@@ -1101,45 +1101,41 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
               {/* التفسير */}
               <div className="mt-4">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <h4 className="text-lg font-bold text-purple-300 flex items-center gap-2">
-                      <BookOpen className="w-5 h-5" />
-                      📚 تفسير القرطبي
-                    </h4>
+                  <div className="flex items-center gap-2">
                     {selectedVerse && !selectedVerse.error && selectedVerse.surahNumber && selectedVerse.ayah && (
                       <a
                         href={`https://www.altafsir.com/Tafasir.asp?tMadhNo=1&tTafsirNo=5&tSoraNo=${selectedVerse.surahNumber}&tAyahNo=${selectedVerse.ayah}&tDisplay=yes&UserProfile=0&LanguageId=1`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5"
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl"
                         title="فتح تفسير القرطبي في صفحة جديدة"
                       >
-                        <ExternalLink className="w-3.5 h-3.5" />
+                        <ExternalLink className="w-2 h-4" />
                         تصفح التفسير
                       </a>
                     )}
+                    <button
+                      onClick={() => {
+                        setShowTafseer(!showTafseer);
+                        if (!showTafseer && selectedVerse && !selectedVerse.error) {
+                          fetchTafseer(selectedVerse.surahNumber, selectedVerse.ayah);
+                        }
+                      }}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl"
+                    >
+                      {showTafseer ? (
+                        <>
+                          <ChevronUp className="w-4 h-4" />
+                          إخفاء التفسير
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-4 h-4" />
+                          عرض التفسير
+                        </>
+                      )}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => {
-                      setShowTafseer(!showTafseer);
-                      if (!showTafseer && selectedVerse && !selectedVerse.error) {
-                        fetchTafseer(selectedVerse.surahNumber, selectedVerse.ayah);
-                      }
-                    }}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
-                  >
-                    {showTafseer ? (
-                      <>
-                        <ChevronUp className="w-4 h-4" />
-                        إخفاء التفسير
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="w-4 h-4" />
-                        عرض التفسير
-                      </>
-                    )}
-                  </button>
                 </div>
 
                 {showTafseer && (
