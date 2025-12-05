@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Clock, Star, TrendingUp, Lightbulb, AlertCircle, BookOpen, Sparkles, Zap, Pin, PinOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { Clock, Star, TrendingUp, Lightbulb, AlertCircle, BookOpen, Sparkles, Zap, Pin, PinOff, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { getNumberInfo, getNearestNumberInfo, calculateNumberEnergy } from './../../Quranicnumbersdatabase';
 
 const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
@@ -262,6 +262,13 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
   const fetchTafseer = async (surahNumber, ayahNumber) => {
     if (!surahNumber || !ayahNumber) return;
     
+    // إنشاء روابط التفسير دائماً
+    const tafseerLinks = {
+      altafsir: `https://www.altafsir.com/Tafasir.asp?tMadhNo=1&tTafsirNo=5&tSoraNo=${surahNumber}&tAyahNo=${ayahNumber}&tDisplay=yes&UserProfile=0&LanguageId=1`,
+      islamweb: `https://www.islamweb.net/quran/index.php?page=showquran&sura=${surahNumber}&aya=${ayahNumber}`,
+      quran: `https://quran.ksu.edu.sa/tafseer/qurtubi/sura${surahNumber}-aya${ayahNumber}.html`
+    };
+    
     setTafseerLoading(true);
     try {
       // محاولة 1: استخدام API من alquran.cloud
@@ -283,7 +290,8 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
             setTafseer({
               text: data.data.text,
               author: 'القرطبي',
-              type: 'qurtubi'
+              type: 'qurtubi',
+              links: tafseerLinks
             });
             return;
           }
@@ -292,7 +300,8 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
             setTafseer({
               text: data.data[0].text,
               author: 'القرطبي',
-              type: 'qurtubi'
+              type: 'qurtubi',
+              links: tafseerLinks
             });
             return;
           }
@@ -314,19 +323,14 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
           setTafseer({
             text: altData.text || altData.tafseer,
             author: 'القرطبي',
-            type: 'qurtubi'
+            type: 'qurtubi',
+            links: tafseerLinks
           });
           return;
         }
       }
       
       // إذا فشلت جميع المحاولات، نعرض روابط مباشرة
-      const tafseerLinks = {
-        altafsir: `https://www.altafsir.com/Tafasir.asp?tSoraNo=${surahNumber}&tAyahNo=${ayahNumber}&tTafsirNo=5`,
-        islamweb: `https://www.islamweb.net/quran/index.php?page=showquran&sura=${surahNumber}&aya=${ayahNumber}`,
-        quran: `https://quran.ksu.edu.sa/tafseer/qurtubi/sura${surahNumber}-aya${ayahNumber}.html`
-      };
-      
       setTafseer({
         text: `التفسير غير متاح حالياً من API. يرجى استخدام الروابط المباشرة أدناه للوصول إلى تفسير القرطبي.`,
         author: 'القرطبي',
@@ -337,13 +341,6 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
       
     } catch (error) {
       console.error('Error fetching tafseer:', error);
-      
-      // حتى في حالة الخطأ، نعرض الروابط
-      const tafseerLinks = {
-        altafsir: `https://www.altafsir.com/Tafasir.asp?tSoraNo=${surahNumber}&tAyahNo=${ayahNumber}&tTafsirNo=5`,
-        islamweb: `https://www.islamweb.net/quran/index.php?page=showquran&sura=${surahNumber}&aya=${ayahNumber}`,
-        quran: `https://quran.ksu.edu.sa/tafseer/qurtubi/sura${surahNumber}-aya${ayahNumber}.html`
-      };
       
       setTafseer({
         text: 'حدث خطأ في تحميل التفسير. يرجى استخدام الروابط المباشرة أدناه.',
@@ -1104,10 +1101,24 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
               {/* التفسير */}
               <div className="mt-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-lg font-bold text-purple-300 flex items-center gap-2">
-                    <BookOpen className="w-5 h-5" />
-                    📚 تفسير القرطبي
-                  </h4>
+                  <div className="flex items-center gap-3">
+                    <h4 className="text-lg font-bold text-purple-300 flex items-center gap-2">
+                      <BookOpen className="w-5 h-5" />
+                      📚 تفسير القرطبي
+                    </h4>
+                    {selectedVerse && !selectedVerse.error && selectedVerse.surahNumber && selectedVerse.ayah && (
+                      <a
+                        href={`https://www.altafsir.com/Tafasir.asp?tMadhNo=1&tTafsirNo=5&tSoraNo=${selectedVerse.surahNumber}&tAyahNo=${selectedVerse.ayah}&tDisplay=yes&UserProfile=0&LanguageId=1`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5"
+                        title="فتح تفسير القرطبي في صفحة جديدة"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        تصفح التفسير
+                      </a>
+                    )}
+                  </div>
                   <button
                     onClick={() => {
                       setShowTafseer(!showTafseer);
@@ -1153,16 +1164,18 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                         <div className="text-sm sm:text-base text-gray-200 leading-relaxed font-arabic bg-purple-900/30 p-4 rounded-lg border border-purple-500/20">
                           {tafseer.text}
                         </div>
-                        {tafseer.error && tafseer.links && (
+                        
+                        {/* روابط تصفح التفسير الكامل - تظهر دائماً */}
+                        {tafseer.links && (
                           <div className="mt-3 text-xs text-purple-300 bg-purple-900/30 p-3 rounded border border-purple-500/20">
-                            <p className="mb-2 font-bold">💡 روابط مباشرة لتفسير {tafseer.author}:</p>
+                            <p className="mb-2 font-bold">🔗 تصفح التفسير الكامل على:</p>
                             <ul className="list-none mt-2 space-y-2">
                               <li>
                                 <a 
                                   href={tafseer.links.altafsir} 
                                   target="_blank" 
                                   rel="noopener noreferrer" 
-                                  className="text-blue-300 hover:text-blue-200 hover:underline flex items-center gap-2 bg-blue-900/30 px-3 py-2 rounded border border-blue-500/30"
+                                  className="text-blue-300 hover:text-blue-200 hover:underline flex items-center gap-2 bg-blue-900/30 px-3 py-2 rounded border border-blue-500/30 transition-colors"
                                 >
                                   <BookOpen className="w-4 h-4" />
                                   موقع التفسير (altafsir.com)
@@ -1173,7 +1186,7 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                                   href={tafseer.links.islamweb} 
                                   target="_blank" 
                                   rel="noopener noreferrer" 
-                                  className="text-blue-300 hover:text-blue-200 hover:underline flex items-center gap-2 bg-blue-900/30 px-3 py-2 rounded border border-blue-500/30"
+                                  className="text-blue-300 hover:text-blue-200 hover:underline flex items-center gap-2 bg-blue-900/30 px-3 py-2 rounded border border-blue-500/30 transition-colors"
                                 >
                                   <BookOpen className="w-4 h-4" />
                                   إسلام ويب (islamweb.net)
@@ -1184,13 +1197,19 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                                   href={tafseer.links.quran} 
                                   target="_blank" 
                                   rel="noopener noreferrer" 
-                                  className="text-blue-300 hover:text-blue-200 hover:underline flex items-center gap-2 bg-blue-900/30 px-3 py-2 rounded border border-blue-500/30"
+                                  className="text-blue-300 hover:text-blue-200 hover:underline flex items-center gap-2 bg-blue-900/30 px-3 py-2 rounded border border-blue-500/30 transition-colors"
                                 >
                                   <BookOpen className="w-4 h-4" />
                                   القرآن الكريم (quran.ksu.edu.sa)
                                 </a>
                               </li>
                             </ul>
+                          </div>
+                        )}
+                        
+                        {tafseer.error && (
+                          <div className="mt-2 text-xs text-yellow-300 bg-yellow-900/30 px-2 py-1 rounded text-center">
+                            ⚠️ التفسير غير متاح من API، استخدم الروابط أعلاه
                           </div>
                         )}
                       </div>
