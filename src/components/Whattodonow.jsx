@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Clock, Star, TrendingUp, Lightbulb, AlertCircle, BookOpen, Sparkles, Zap, Pin, PinOff, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { Clock, Star, TrendingUp, Lightbulb, AlertCircle, BookOpen, Sparkles, Zap, Pin, PinOff, ChevronDown, ChevronUp, ExternalLink, Calculator } from 'lucide-react';
 import { getNumberInfo, getNearestNumberInfo, calculateNumberEnergy } from './../../Quranicnumbersdatabase';
+import { analyzeVerseKitabMarqum, getSurahMuqattaatInfo, jumalStandard, sequentialOrder, reduceToSingleDigit } from './../../KitabMarqumSystem';
 
 const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -14,6 +15,7 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
   const [tafseer, setTafseer] = useState(null); // التفسير
   const [tafseerLoading, setTafseerLoading] = useState(false);
   const [showTafseer, setShowTafseer] = useState(false); // إظهار/إخفاء التفسير
+  const [kitabMarqumAnalysis, setKitabMarqumAnalysis] = useState(null); // تحليل كتاب مرقوم
   
   // حالات التنبيه
   const [alerts, setAlerts] = useState({
@@ -233,6 +235,21 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
         };
         
         setSelectedVerse(verse);
+        
+        // حساب تحليل كتاب مرقوم للآية
+        if (verseData.text && verseData.surah?.number && verseData.numberInSurah) {
+          try {
+            const marqumAnalysis = analyzeVerseKitabMarqum(
+              verseData.surah.number,
+              verseData.numberInSurah,
+              verseData.text
+            );
+            setKitabMarqumAnalysis(marqumAnalysis);
+          } catch (error) {
+            console.error('Error analyzing Kitab Marqum:', error);
+            setKitabMarqumAnalysis(null);
+          }
+        }
         
         // إذا لم تكن هناك آية مثبتة، أو إذا كانت الآية المثبتة مختلفة، لا نغيرها
         // (يتم التثبيت يدوياً فقط)
@@ -1097,6 +1114,158 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                   </div>
                 </div>
               </div>
+
+              {/* تحليل كتاب مرقوم - الجُمَّل */}
+              {kitabMarqumAnalysis && kitabMarqumAnalysis.verseAnalysis && (
+                <div className="bg-gradient-to-br from-amber-900/40 via-orange-900/40 to-red-900/40 backdrop-blur-lg rounded-2xl p-4 sm:p-6 border-2 border-amber-400/50 shadow-xl">
+                  <div className="flex items-center justify-center gap-2 mb-4">
+                    <Calculator className="w-6 h-6 sm:w-8 sm:h-8 text-amber-300" />
+                    <h3 className="text-xl sm:text-2xl font-bold text-amber-300 text-center">
+                      📐 حساب الجُمَّل - كتاب مرقوم
+                    </h3>
+                  </div>
+
+                  {/* الحروف المقطعة للسورة */}
+                  {kitabMarqumAnalysis.muqattaatAnalysis && kitabMarqumAnalysis.muqattaatAnalysis.muqattaat && (
+                    <div className="bg-amber-900/30 rounded-lg p-4 mb-4 border border-amber-400/30">
+                      <div className="text-center mb-3">
+                        <p className="text-sm sm:text-base text-amber-200 mb-2">
+                          <span className="font-bold">الحروف المقطعة للسورة:</span>
+                        </p>
+                        <div className="flex items-center justify-center gap-3 flex-wrap">
+                          <span className="text-2xl sm:text-3xl font-bold text-amber-300">
+                            {kitabMarqumAnalysis.muqattaatAnalysis.muqattaat}
+                          </span>
+                          <span className="text-sm sm:text-base text-amber-200">
+                            ({kitabMarqumAnalysis.muqattaatAnalysis.analysis?.description || ''})
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {kitabMarqumAnalysis.muqattaatAnalysis.analysis && (
+                        <div className="mt-3 space-y-2">
+                          {kitabMarqumAnalysis.muqattaatAnalysis.analysis.letterValues && kitabMarqumAnalysis.muqattaatAnalysis.analysis.letterValues.length > 0 && (
+                            <div className="text-xs sm:text-sm text-amber-200">
+                              <p className="mb-2 font-bold">قيم الحروف:</p>
+                              <div className="flex flex-wrap justify-center gap-2">
+                                {kitabMarqumAnalysis.muqattaatAnalysis.analysis.letterValues.map((lv, idx) => (
+                                  <span key={idx} className="bg-amber-800/50 px-2 py-1 rounded">
+                                    {lv.letter}: {lv.sequentialValue}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {kitabMarqumAnalysis.muqattaatAnalysis.analysis.simplePattern && (
+                            <div className="text-xs sm:text-sm text-amber-200 mt-3">
+                              <p className="mb-1 font-bold">النمط البسيط:</p>
+                              <p className="text-center">
+                                {kitabMarqumAnalysis.muqattaatAnalysis.analysis.simplePattern.pattern} = {kitabMarqumAnalysis.muqattaatAnalysis.analysis.simplePattern.sum}
+                                {kitabMarqumAnalysis.muqattaatAnalysis.analysis.simplePattern.reduced !== kitabMarqumAnalysis.muqattaatAnalysis.analysis.simplePattern.sum && (
+                                  <span className="mr-2"> → {kitabMarqumAnalysis.muqattaatAnalysis.analysis.simplePattern.reduced}</span>
+                                )}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* حساب الجُمَّل للآية */}
+                  <div className="space-y-4">
+                    {/* الجُمَّل الكلاسيكي */}
+                    <div className="bg-amber-800/30 rounded-lg p-4 border border-amber-400/30">
+                      <h4 className="text-base sm:text-lg font-bold text-amber-200 mb-3 text-center">
+                        🔢 الجُمَّل الكلاسيكي
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
+                        <div>
+                          <div className="text-xs sm:text-sm text-amber-300 mb-1">المجموع الكلي</div>
+                          <div className="text-2xl sm:text-3xl font-bold text-amber-100">
+                            {kitabMarqumAnalysis.verseAnalysis.totalJumal}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs sm:text-sm text-amber-300 mb-1">الاختزال</div>
+                          <div className="text-2xl sm:text-3xl font-bold text-amber-100">
+                            {kitabMarqumAnalysis.verseAnalysis.reducedJumal}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* الجُمَّل الترتيبي */}
+                    <div className="bg-orange-800/30 rounded-lg p-4 border border-orange-400/30">
+                      <h4 className="text-base sm:text-lg font-bold text-orange-200 mb-3 text-center">
+                        📊 الجُمَّل الترتيبي (كتاب مرقوم)
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
+                        <div>
+                          <div className="text-xs sm:text-sm text-orange-300 mb-1">المجموع الكلي</div>
+                          <div className="text-2xl sm:text-3xl font-bold text-orange-100">
+                            {kitabMarqumAnalysis.verseAnalysis.totalSequential}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs sm:text-sm text-orange-300 mb-1">الاختزال</div>
+                          <div className="text-2xl sm:text-3xl font-bold text-orange-100">
+                            {kitabMarqumAnalysis.verseAnalysis.reducedSequential}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {kitabMarqumAnalysis.verseAnalysis.sequentialPattern && (
+                        <div className="mt-3 text-xs sm:text-sm text-orange-200 text-center">
+                          <p className="mb-1 font-bold">النمط:</p>
+                          <p className="text-base sm:text-lg">
+                            {kitabMarqumAnalysis.verseAnalysis.sequentialPattern.pattern} = {kitabMarqumAnalysis.verseAnalysis.sequentialPattern.sum}
+                            {kitabMarqumAnalysis.verseAnalysis.sequentialPattern.reduced !== kitabMarqumAnalysis.verseAnalysis.sequentialPattern.sum && (
+                              <span className="mr-2"> → {kitabMarqumAnalysis.verseAnalysis.sequentialPattern.reduced}</span>
+                            )}
+                          </p>
+                        </div>
+                      )}
+                      {!kitabMarqumAnalysis.verseAnalysis.sequentialPattern && (
+                        <div className="mt-3 text-xs sm:text-sm text-orange-300 text-center">
+                          <p>النمط: غير متاح</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* تفاصيل الحروف */}
+                    {kitabMarqumAnalysis.verseAnalysis.letterValues && kitabMarqumAnalysis.verseAnalysis.letterValues.length > 0 && (
+                      <div className="bg-red-800/30 rounded-lg p-4 border border-red-400/30">
+                        <h4 className="text-base sm:text-lg font-bold text-red-200 mb-3 text-center">
+                          🔤 تفاصيل الحروف
+                        </h4>
+                        <div className="max-h-48 overflow-y-auto">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 text-xs sm:text-sm">
+                            {kitabMarqumAnalysis.verseAnalysis.letterValues
+                              .filter((lv, idx, arr) => arr.findIndex(l => l.letter === lv.letter) === idx)
+                              .slice(0, 20)
+                              .map((lv, idx) => (
+                                <div key={idx} className="bg-red-900/40 p-2 rounded text-center">
+                                  <div className="font-bold text-red-100 text-lg">{lv.letter}</div>
+                                  <div className="text-red-300 text-xs">
+                                    ترتيبي: {lv.sequentialValue || '-'}
+                                  </div>
+                                  <div className="text-red-300 text-xs">
+                                    كلاسيكي: {lv.jumalValue || '-'}
+                                  </div>
+                                  <div className="text-red-200 text-xs mt-1">
+                                    التكرار: {lv.count}
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* التفسير */}
               <div className="mt-4">
