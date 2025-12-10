@@ -23,6 +23,9 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
     blessedChange: false,
     majorNumberChange: false
   });
+  
+  // إشعارات التطابق الرقمي
+  const [numericMatchAlert, setNumericMatchAlert] = useState(null);
 
   // ===== نظام التحديث الذكي متعدد المستويات =====
   
@@ -202,6 +205,283 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
     return Math.floor(verseNumber);
   };
 
+  // دالة حساب رقم اليوم في السنة
+  const getDayOfYear = useCallback((year, month, day) => {
+    const date = new Date(year, month - 1, day);
+    const start = new Date(year, 0, 1);
+    const diff = date - start;
+    const oneDay = 1000 * 60 * 60 * 24;
+    return Math.floor(diff / oneDay) + 1;
+  }, []);
+
+  // دالة التحقق من التطابق الرقمي
+  const checkNumericMatches = useCallback((hours, minutes, verseNumber, gregorianDate, hijriDate, marqumAnalysis) => {
+    if (!marqumAnalysis || !marqumAnalysis.verseAnalysis) {
+      return null;
+    }
+
+    const matches = [];
+    
+    // اختزال الساعة
+    const hourReduced = reduceToSingleDigit(hours);
+    
+    // اختزال الدقيقة
+    const minuteReduced = reduceToSingleDigit(minutes);
+    
+    // اختزالات الجُمَّل
+    const jumalReduced = marqumAnalysis.verseAnalysis.reducedJumal;
+    const sequentialReduced = marqumAnalysis.verseAnalysis.reducedSequential;
+    const jumalTotal = marqumAnalysis.verseAnalysis.totalJumal;
+    const sequentialTotal = marqumAnalysis.verseAnalysis.totalSequential;
+    
+    // === فحص تطابق اختزال الساعة والدقيقة مع الجُمَّل ===
+    if (hourReduced === jumalReduced || hourReduced === sequentialReduced) {
+      matches.push({
+        type: 'hour_jumal',
+        message: `🎯 تطابق! اختزال الساعة (${hourReduced}) = اختزال الجُمَّل ${hourReduced === jumalReduced ? 'الكلاسيكي' : 'الترتيبي'} (${hourReduced === jumalReduced ? jumalReduced : sequentialReduced})`,
+        value: hourReduced,
+        matchType: hourReduced === jumalReduced ? 'jumal' : 'sequential'
+      });
+    }
+    
+    if (minuteReduced === jumalReduced || minuteReduced === sequentialReduced) {
+      matches.push({
+        type: 'minute_jumal',
+        message: `🎯 تطابق! اختزال الدقيقة (${minuteReduced}) = اختزال الجُمَّل ${minuteReduced === jumalReduced ? 'الكلاسيكي' : 'الترتيبي'} (${minuteReduced === jumalReduced ? jumalReduced : sequentialReduced})`,
+        value: minuteReduced,
+        matchType: minuteReduced === jumalReduced ? 'jumal' : 'sequential'
+      });
+    }
+    
+    // === فحص تطابق الجُمَّل مع التاريخ الميلادي ===
+    if (gregorianDate) {
+      const { year, month, day } = gregorianDate;
+      
+      // تطابق مع يوم الشهر
+      if (day === jumalReduced || day === sequentialReduced || day === jumalTotal || day === sequentialTotal) {
+        matches.push({
+          type: 'jumal_gregorian_day',
+          message: `🎯 تطابق! الجُمَّل ${day === jumalReduced || day === jumalTotal ? 'الكلاسيكي' : 'الترتيبي'} (${day === jumalReduced ? jumalReduced : day === jumalTotal ? jumalTotal : day === sequentialReduced ? sequentialReduced : sequentialTotal}) = اليوم الميلادي (${day})`,
+          value: day,
+          matchType: 'gregorian_day'
+        });
+      }
+      
+      // تطابق مع الشهر
+      if (month === jumalReduced || month === sequentialReduced || month === jumalTotal || month === sequentialTotal) {
+        matches.push({
+          type: 'jumal_gregorian_month',
+          message: `🎯 تطابق! الجُمَّل ${month === jumalReduced || month === jumalTotal ? 'الكلاسيكي' : 'الترتيبي'} (${month === jumalReduced ? jumalReduced : month === jumalTotal ? jumalTotal : month === sequentialReduced ? sequentialReduced : sequentialTotal}) = الشهر الميلادي (${month})`,
+          value: month,
+          matchType: 'gregorian_month'
+        });
+      }
+      
+      // تطابق مع السنة (أو اختزالها)
+      const yearReduced = reduceToSingleDigit(year);
+      if (year === jumalTotal || year === sequentialTotal || yearReduced === jumalReduced || yearReduced === sequentialReduced) {
+        matches.push({
+          type: 'jumal_gregorian_year',
+          message: `🎯 تطابق! الجُمَّل ${year === jumalTotal || yearReduced === jumalReduced ? 'الكلاسيكي' : 'الترتيبي'} ${year === jumalTotal || year === sequentialTotal ? `(${year === jumalTotal ? jumalTotal : sequentialTotal})` : `(اختزال: ${yearReduced === jumalReduced ? jumalReduced : sequentialReduced})`} = السنة الميلادية ${year === jumalTotal || year === sequentialTotal ? `(${year})` : `(اختزال: ${yearReduced})`}`,
+          value: year,
+          matchType: 'gregorian_year'
+        });
+      }
+      
+      // تطابق مع رقم اليوم في السنة
+      const dayOfYear = getDayOfYear(year, month, day);
+      if (dayOfYear === jumalReduced || dayOfYear === sequentialReduced || dayOfYear === jumalTotal || dayOfYear === sequentialTotal) {
+        matches.push({
+          type: 'jumal_gregorian_day_of_year',
+          message: `🎯 تطابق! الجُمَّل ${dayOfYear === jumalReduced || dayOfYear === jumalTotal ? 'الكلاسيكي' : 'الترتيبي'} (${dayOfYear === jumalReduced ? jumalReduced : dayOfYear === jumalTotal ? jumalTotal : dayOfYear === sequentialReduced ? sequentialReduced : sequentialTotal}) = رقم اليوم في السنة الميلادية (${dayOfYear})`,
+          value: dayOfYear,
+          matchType: 'gregorian_day_of_year'
+        });
+      }
+    }
+    
+    // === فحص تطابق الجُمَّل مع التاريخ الهجري ===
+    if (hijriDate && hijriDate.day > 0) {
+      const { year, month, day } = hijriDate;
+      
+      // تطابق مع يوم الشهر
+      if (day === jumalReduced || day === sequentialReduced || day === jumalTotal || day === sequentialTotal) {
+        matches.push({
+          type: 'jumal_hijri_day',
+          message: `🎯 تطابق! الجُمَّل ${day === jumalReduced || day === jumalTotal ? 'الكلاسيكي' : 'الترتيبي'} (${day === jumalReduced ? jumalReduced : day === jumalTotal ? jumalTotal : day === sequentialReduced ? sequentialReduced : sequentialTotal}) = اليوم الهجري (${day})`,
+          value: day,
+          matchType: 'hijri_day'
+        });
+      }
+      
+      // تطابق مع الشهر
+      if (month === jumalReduced || month === sequentialReduced || month === jumalTotal || month === sequentialTotal) {
+        matches.push({
+          type: 'jumal_hijri_month',
+          message: `🎯 تطابق! الجُمَّل ${month === jumalReduced || month === jumalTotal ? 'الكلاسيكي' : 'الترتيبي'} (${month === jumalReduced ? jumalReduced : month === jumalTotal ? jumalTotal : month === sequentialReduced ? sequentialReduced : sequentialTotal}) = الشهر الهجري (${month})`,
+          value: month,
+          matchType: 'hijri_month'
+        });
+      }
+      
+      // تطابق مع السنة (أو اختزالها)
+      const yearReduced = reduceToSingleDigit(year);
+      if (year === jumalTotal || year === sequentialTotal || yearReduced === jumalReduced || yearReduced === sequentialReduced) {
+        matches.push({
+          type: 'jumal_hijri_year',
+          message: `🎯 تطابق! الجُمَّل ${year === jumalTotal || yearReduced === jumalReduced ? 'الكلاسيكي' : 'الترتيبي'} ${year === jumalTotal || year === sequentialTotal ? `(${year === jumalTotal ? jumalTotal : sequentialTotal})` : `(اختزال: ${yearReduced === jumalReduced ? jumalReduced : sequentialReduced})`} = السنة الهجرية ${year === jumalTotal || year === sequentialTotal ? `(${year})` : `(اختزال: ${yearReduced})`}`,
+          value: year,
+          matchType: 'hijri_year'
+        });
+      }
+      
+      // تطابق مع رقم اليوم في السنة
+      const dayOfYear = getDayOfYear(year, month, day);
+      if (dayOfYear === jumalReduced || dayOfYear === sequentialReduced || dayOfYear === jumalTotal || dayOfYear === sequentialTotal) {
+        matches.push({
+          type: 'jumal_hijri_day_of_year',
+          message: `🎯 تطابق! الجُمَّل ${dayOfYear === jumalReduced || dayOfYear === jumalTotal ? 'الكلاسيكي' : 'الترتيبي'} (${dayOfYear === jumalReduced ? jumalReduced : dayOfYear === jumalTotal ? jumalTotal : dayOfYear === sequentialReduced ? sequentialReduced : sequentialTotal}) = رقم اليوم في السنة الهجرية (${dayOfYear})`,
+          value: dayOfYear,
+          matchType: 'hijri_day_of_year'
+        });
+      }
+    }
+    
+    // === فحص تطابق رقم الآية مع التاريخ ===
+    if (verseNumber) {
+      // مع اليوم الميلادي
+      if (gregorianDate && verseNumber === gregorianDate.day) {
+        matches.push({
+          type: 'verse_gregorian_day',
+          message: `🎯 تطابق! رقم الآية (${verseNumber}) = اليوم الميلادي (${gregorianDate.day})`,
+          value: verseNumber,
+          matchType: 'verse_gregorian_day'
+        });
+      }
+      
+      // مع الشهر الميلادي
+      if (gregorianDate && verseNumber === gregorianDate.month) {
+        matches.push({
+          type: 'verse_gregorian_month',
+          message: `🎯 تطابق! رقم الآية (${verseNumber}) = الشهر الميلادي (${gregorianDate.month})`,
+          value: verseNumber,
+          matchType: 'verse_gregorian_month'
+        });
+      }
+      
+      // مع السنة الميلادية (أو اختزالها)
+      if (gregorianDate) {
+        const yearReduced = reduceToSingleDigit(gregorianDate.year);
+        if (verseNumber === gregorianDate.year || verseNumber === yearReduced) {
+          matches.push({
+            type: 'verse_gregorian_year',
+            message: `🎯 تطابق! رقم الآية (${verseNumber}) = ${verseNumber === gregorianDate.year ? `السنة الميلادية (${gregorianDate.year})` : `اختزال السنة الميلادية (${yearReduced})`}`,
+            value: verseNumber,
+            matchType: 'verse_gregorian_year'
+          });
+        }
+        
+        // مع رقم اليوم في السنة الميلادية
+        const dayOfYear = getDayOfYear(gregorianDate.year, gregorianDate.month, gregorianDate.day);
+        if (verseNumber === dayOfYear) {
+          matches.push({
+            type: 'verse_gregorian_day_of_year',
+            message: `🎯 تطابق! رقم الآية (${verseNumber}) = رقم اليوم في السنة الميلادية (${dayOfYear})`,
+            value: verseNumber,
+            matchType: 'verse_gregorian_day_of_year'
+          });
+        }
+      }
+      
+      // مع اليوم الهجري
+      if (hijriDate && hijriDate.day > 0 && verseNumber === hijriDate.day) {
+        matches.push({
+          type: 'verse_hijri_day',
+          message: `🎯 تطابق! رقم الآية (${verseNumber}) = اليوم الهجري (${hijriDate.day})`,
+          value: verseNumber,
+          matchType: 'verse_hijri_day'
+        });
+      }
+      
+      // مع الشهر الهجري
+      if (hijriDate && hijriDate.month > 0 && verseNumber === hijriDate.month) {
+        matches.push({
+          type: 'verse_hijri_month',
+          message: `🎯 تطابق! رقم الآية (${verseNumber}) = الشهر الهجري (${hijriDate.month})`,
+          value: verseNumber,
+          matchType: 'verse_hijri_month'
+        });
+      }
+      
+      // مع السنة الهجرية (أو اختزالها)
+      if (hijriDate && hijriDate.year > 0) {
+        const yearReduced = reduceToSingleDigit(hijriDate.year);
+        if (verseNumber === hijriDate.year || verseNumber === yearReduced) {
+          matches.push({
+            type: 'verse_hijri_year',
+            message: `🎯 تطابق! رقم الآية (${verseNumber}) = ${verseNumber === hijriDate.year ? `السنة الهجرية (${hijriDate.year})` : `اختزال السنة الهجرية (${yearReduced})`}`,
+            value: verseNumber,
+            matchType: 'verse_hijri_year'
+          });
+        }
+        
+        // مع رقم اليوم في السنة الهجرية
+        const dayOfYear = getDayOfYear(hijriDate.year, hijriDate.month, hijriDate.day);
+        if (verseNumber === dayOfYear) {
+          matches.push({
+            type: 'verse_hijri_day_of_year',
+            message: `🎯 تطابق! رقم الآية (${verseNumber}) = رقم اليوم في السنة الهجرية (${dayOfYear})`,
+            value: verseNumber,
+            matchType: 'verse_hijri_day_of_year'
+          });
+        }
+      }
+    }
+    
+    // === فحص تطابق اختزال الساعة والدقيقة مع التاريخ ===
+    if (gregorianDate) {
+      if (hourReduced === gregorianDate.day) {
+        matches.push({
+          type: 'hour_gregorian_day',
+          message: `🎯 تطابق! اختزال الساعة (${hourReduced}) = اليوم الميلادي (${gregorianDate.day})`,
+          value: hourReduced,
+          matchType: 'hour_gregorian_day'
+        });
+      }
+      
+      if (minuteReduced === gregorianDate.day) {
+        matches.push({
+          type: 'minute_gregorian_day',
+          message: `🎯 تطابق! اختزال الدقيقة (${minuteReduced}) = اليوم الميلادي (${gregorianDate.day})`,
+          value: minuteReduced,
+          matchType: 'minute_gregorian_day'
+        });
+      }
+    }
+    
+    if (hijriDate && hijriDate.day > 0) {
+      if (hourReduced === hijriDate.day) {
+        matches.push({
+          type: 'hour_hijri_day',
+          message: `🎯 تطابق! اختزال الساعة (${hourReduced}) = اليوم الهجري (${hijriDate.day})`,
+          value: hourReduced,
+          matchType: 'hour_hijri_day'
+        });
+      }
+      
+      if (minuteReduced === hijriDate.day) {
+        matches.push({
+          type: 'minute_hijri_day',
+          message: `🎯 تطابق! اختزال الدقيقة (${minuteReduced}) = اليوم الهجري (${hijriDate.day})`,
+          value: minuteReduced,
+          matchType: 'minute_hijri_day'
+        });
+      }
+    }
+    
+    return matches.length > 0 ? matches : null;
+  }, [getDayOfYear]);
+
   // جلب الآية من API
   const fetchVerseFromAPI = async (verseNumber, meta = {}) => {
     setVerseLoading(true);
@@ -245,6 +525,32 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
               verseData.text
             );
             setKitabMarqumAnalysis(marqumAnalysis);
+            
+            // التحقق من التطابق الرقمي
+            if (meta.currentTime && meta.gregorianDate && meta.hijriDate) {
+              const now = meta.currentTime;
+              const hours = now.getHours();
+              const minutes = now.getMinutes();
+              const matches = checkNumericMatches(
+                hours,
+                minutes,
+                verseNumber,
+                meta.gregorianDate,
+                meta.hijriDate,
+                marqumAnalysis
+              );
+              
+              if (matches && matches.length > 0) {
+                setNumericMatchAlert({
+                  matches: matches,
+                  timestamp: new Date()
+                });
+                // إخفاء الإشعار بعد 10 ثواني
+                setTimeout(() => {
+                  setNumericMatchAlert(null);
+                }, 10000);
+              }
+            }
           } catch (error) {
             console.error('Error analyzing Kitab Marqum:', error);
             setKitabMarqumAnalysis(null);
@@ -530,7 +836,7 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
       selectedNumberInfo
     );
     
-    fetchVerseFromAPI(verseNumber, { gregorianDate, hijriDate });
+    fetchVerseFromAPI(verseNumber, { gregorianDate, hijriDate, currentTime: time });
     
     setIsLoading(false);
   }, [analysis, selectedNumber, selectedNumberInfo]);
@@ -922,6 +1228,33 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
         </div>
       )}
 
+      {/* إشعار التطابق الرقمي */}
+      {numericMatchAlert && numericMatchAlert.matches && numericMatchAlert.matches.length > 0 && (
+        <div className="fixed top-20 sm:top-24 left-1/2 transform -translate-x-1/2 z-50 px-2 w-full max-w-lg animate-pulse">
+          <div className="bg-gradient-to-r from-yellow-600 via-orange-600 to-red-600 text-white px-4 py-3 sm:px-6 sm:py-4 rounded-2xl shadow-2xl border-2 border-yellow-300">
+            <div className="flex items-start gap-3">
+              <Star className="w-6 h-6 sm:w-8 sm:h-8 animate-spin flex-shrink-0 mt-1 fill-current" />
+              <div className="flex-1">
+                <h4 className="font-bold text-base sm:text-lg mb-2">🎯 تطابق رقمي مذهل!</h4>
+                <div className="space-y-2">
+                  {numericMatchAlert.matches.map((match, idx) => (
+                    <div key={idx} className="bg-white/20 rounded-lg p-2 sm:p-3 text-sm sm:text-base">
+                      <p className="font-semibold">{match.message}</p>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setNumericMatchAlert(null)}
+                  className="mt-3 text-xs sm:text-sm underline hover:no-underline opacity-80 hover:opacity-100"
+                >
+                  إغلاق
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* رأس القسم */}
       <div className="text-center space-y-2 px-2">
         <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white flex items-center justify-center gap-2">
@@ -1233,6 +1566,31 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                         </div>
                       )}
                     </div>
+
+                    {/* التطابقات الرقمية */}
+                    {numericMatchAlert && numericMatchAlert.matches && numericMatchAlert.matches.length > 0 && (
+                      <div className="bg-gradient-to-r from-green-800/40 to-emerald-800/40 rounded-lg p-4 border-2 border-green-400/70 shadow-xl">
+                        <h4 className="text-base sm:text-lg font-bold text-green-200 mb-3 text-center flex items-center justify-center gap-2">
+                          <Star className="w-5 h-5 fill-current animate-pulse" />
+                          🎯 التطابقات الرقمية المكتشفة
+                        </h4>
+                        <div className="space-y-2">
+                          {numericMatchAlert.matches.map((match, idx) => (
+                            <div key={idx} className="bg-green-900/50 rounded-lg p-3 border border-green-400/50">
+                              <p className="text-sm sm:text-base text-green-100 text-center font-semibold">
+                                {match.message}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-3 text-xs text-green-300 text-center">
+                          <p>⏰ الوقت: {analysis.time.hours}:{String(analysis.time.minutes).padStart(2, '0')}</p>
+                          {selectedVerse && (
+                            <p className="mt-1">📖 رقم الآية: {selectedVerse.number}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* تفاصيل الحروف */}
                     {kitabMarqumAnalysis.verseAnalysis.letterValues && kitabMarqumAnalysis.verseAnalysis.letterValues.length > 0 && (
