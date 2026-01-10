@@ -68,6 +68,198 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
 
   // ===== دوال التحليل =====
 
+  // 🔍 البحث عن الآية المثالية مع التطابق التام
+  const findPerfectMatchingVerse = async (
+    baseVerseNumber,
+    hours,
+    minutes,
+    seconds,
+    teslaScore,
+    blessedScore,
+    recommendations,
+    gregorianDate,
+    hijriDate,
+    selectedNumber = null,
+    selectedNumberInfo = null
+  ) => {
+    const TOTAL_VERSES = 6236;
+    const SEARCH_RANGE = 100; // البحث في نطاق ±100 آية (تم تقليل النطاق لتسريع البحث)
+    const MIN_START = Math.max(1, baseVerseNumber - SEARCH_RANGE);
+    const MAX_END = Math.min(TOTAL_VERSES, baseVerseNumber + SEARCH_RANGE);
+    
+    let bestVerse = {
+      number: baseVerseNumber,
+      score: 0,
+      matches: []
+    };
+    
+    // حساب قيم الوقت للبحث
+    const hourReduced = reduceToSingleDigit(hours);
+    const minuteReduced = reduceToSingleDigit(minutes);
+    const secondReduced = reduceToSingleDigit(seconds);
+    const timeSum = hours + minutes + seconds;
+    const timeSumReduced = reduceToSingleDigit(timeSum);
+    const hourMinuteSum = hours + minutes;
+    const minuteSecondSum = minutes + seconds;
+    
+    // دالة مساعدة لحساب نقاط التطابق
+    const calculateMatchScore = (verseNum, marqumAnalysis) => {
+      if (!marqumAnalysis || !marqumAnalysis.verseAnalysis) return { score: 0, matches: [] };
+      
+      const { totalJumal, reducedJumal, totalSequential, reducedSequential } = marqumAnalysis.verseAnalysis;
+      let matchScore = 0;
+      const matches = [];
+      
+      // تطابقات الوقت مع الجُمَّل الكلاسيكي
+      if (hours === totalJumal || hours === reducedJumal) { matchScore += 50; matches.push(`الساعة (${hours}) = الجُمَّل الكلاسيكي`); }
+      if (minutes === totalJumal || minutes === reducedJumal) { matchScore += 50; matches.push(`الدقيقة (${minutes}) = الجُمَّل الكلاسيكي`); }
+      if (seconds === totalJumal || seconds === reducedJumal) { matchScore += 50; matches.push(`الثانية (${seconds}) = الجُمَّل الكلاسيكي`); }
+      if (hourReduced === reducedJumal) { matchScore += 40; matches.push(`اختزال الساعة (${hourReduced}) = اختزال الجُمَّل الكلاسيكي`); }
+      if (minuteReduced === reducedJumal) { matchScore += 40; matches.push(`اختزال الدقيقة (${minuteReduced}) = اختزال الجُمَّل الكلاسيكي`); }
+      if (secondReduced === reducedJumal) { matchScore += 40; matches.push(`اختزال الثانية (${secondReduced}) = اختزال الجُمَّل الكلاسيكي`); }
+      
+      // تطابقات الوقت مع الجُمَّل الترتيبي
+      if (hours === totalSequential || hours === reducedSequential) { matchScore += 50; matches.push(`الساعة (${hours}) = الجُمَّل الترتيبي`); }
+      if (minutes === totalSequential || minutes === reducedSequential) { matchScore += 50; matches.push(`الدقيقة (${minutes}) = الجُمَّل الترتيبي`); }
+      if (seconds === totalSequential || seconds === reducedSequential) { matchScore += 50; matches.push(`الثانية (${seconds}) = الجُمَّل الترتيبي`); }
+      if (hourReduced === reducedSequential) { matchScore += 40; matches.push(`اختزال الساعة (${hourReduced}) = اختزال الجُمَّل الترتيبي`); }
+      if (minuteReduced === reducedSequential) { matchScore += 40; matches.push(`اختزال الدقيقة (${minuteReduced}) = اختزال الجُمَّل الترتيبي`); }
+      if (secondReduced === reducedSequential) { matchScore += 40; matches.push(`اختزال الثانية (${secondReduced}) = اختزال الجُمَّل الترتيبي`); }
+      
+      // تطابقات مجموع الوقت
+      if (timeSum === totalJumal || timeSum === totalSequential) { matchScore += 60; matches.push(`مجموع الوقت (${timeSum}) = الجُمَّل`); }
+      if (timeSumReduced === reducedJumal || timeSumReduced === reducedSequential) { matchScore += 50; matches.push(`اختزال مجموع الوقت (${timeSumReduced}) = اختزال الجُمَّل`); }
+      if (hourMinuteSum === totalJumal || hourMinuteSum === totalSequential) { matchScore += 45; matches.push(`الساعة+الدقيقة (${hourMinuteSum}) = الجُمَّل`); }
+      if (minuteSecondSum === totalJumal || minuteSecondSum === totalSequential) { matchScore += 45; matches.push(`الدقيقة+الثانية (${minuteSecondSum}) = الجُمَّل`); }
+      
+      // تطابقات رقم الآية مع الوقت
+      if (verseNum === hours || verseNum === minutes || verseNum === seconds) { matchScore += 70; matches.push(`رقم الآية (${verseNum}) = الوقت`); }
+      const verseReduced = reduceToSingleDigit(verseNum);
+      if (verseReduced === hourReduced || verseReduced === minuteReduced || verseReduced === secondReduced) { matchScore += 55; matches.push(`اختزال رقم الآية (${verseReduced}) = اختزال الوقت`); }
+      if (verseNum === timeSum || verseNum === hourMinuteSum || verseNum === minuteSecondSum) { matchScore += 65; matches.push(`رقم الآية (${verseNum}) = مجموع الوقت`); }
+      
+      // تطابقات رقم الآية مع الجُمَّل
+      if (verseNum === totalJumal || verseNum === reducedJumal) { matchScore += 60; matches.push(`رقم الآية (${verseNum}) = الجُمَّل الكلاسيكي`); }
+      if (verseNum === totalSequential || verseNum === reducedSequential) { matchScore += 60; matches.push(`رقم الآية (${verseNum}) = الجُمَّل الترتيبي`); }
+      if (verseReduced === reducedJumal) { matchScore += 50; matches.push(`اختزال رقم الآية (${verseReduced}) = اختزال الجُمَّل الكلاسيكي`); }
+      if (verseReduced === reducedSequential) { matchScore += 50; matches.push(`اختزال رقم الآية (${verseReduced}) = اختزال الجُمَّل الترتيبي`); }
+      
+      // تطابقات الرقم المختار
+      if (selectedNumber) {
+        const selectedNum = Number(selectedNumber);
+        const selectedReduced = reduceToSingleDigit(selectedNum);
+        if (selectedNum === totalJumal || selectedNum === totalSequential) { matchScore += 80; matches.push(`⭐ الرقم المختار (${selectedNum}) = الجُمَّل`); }
+        if (selectedReduced === reducedJumal || selectedReduced === reducedSequential) { matchScore += 70; matches.push(`⭐ اختزال الرقم المختار (${selectedReduced}) = اختزال الجُمَّل`); }
+        if (selectedNum === verseNum) { matchScore += 90; matches.push(`⭐ الرقم المختار (${selectedNum}) = رقم الآية`); }
+      }
+      
+      // تطابقات خاصة
+      const specialNumbers = [3, 6, 7, 9, 19];
+      specialNumbers.forEach(specialNum => {
+        if (totalJumal === specialNum || totalSequential === specialNum) { matchScore += 30; matches.push(`✨ الجُمَّل = الرقم المقدس ${specialNum}`); }
+        if (reducedJumal === specialNum || reducedSequential === specialNum) { matchScore += 30; matches.push(`✨ اختزال الجُمَّل = الرقم المقدس ${specialNum}`); }
+      });
+      
+      return { score: matchScore, matches };
+    };
+    
+    // أولاً: فحص الآية الأولية نفسها (الأكثر أهمية)
+    try {
+      const baseResponse = await fetch(`https://api.alquran.cloud/v1/ayah/${baseVerseNumber}/editions/quran-uthmani`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (baseResponse.ok) {
+        const baseData = await baseResponse.json();
+        if (baseData.code === 200 && baseData.data && baseData.data.length && baseData.data[0].text) {
+          const surahNumber = baseData.data[0].surah?.number || 0;
+          const ayahNumber = baseData.data[0].numberInSurah || 0;
+          if (surahNumber && ayahNumber) {
+            const marqumAnalysis = analyzeVerseKitabMarqum(surahNumber, ayahNumber, baseData.data[0].text);
+            if (marqumAnalysis && marqumAnalysis.verseAnalysis) {
+              const { score, matches } = calculateMatchScore(baseVerseNumber, marqumAnalysis);
+              if (score > bestVerse.score) {
+                bestVerse = { number: baseVerseNumber, score, matches, marqumAnalysis };
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Error checking base verse:', error);
+    }
+    
+    // البحث في النطاق (بخطوة 10 لتسريع البحث - نبحث في 20 آية فقط)
+    const searchPromises = [];
+    const searchStep = Math.max(5, Math.floor(SEARCH_RANGE * 2 / 20)); // البحث في 20 آية تقريباً
+    
+    for (let verseNum = MIN_START; verseNum <= MAX_END; verseNum += searchStep) {
+      // تجنب فحص الآية الأولية مرة أخرى
+      if (verseNum === baseVerseNumber) continue;
+      searchPromises.push(
+        (async () => {
+          try {
+            // جلب نص الآية
+            const response = await fetch(`https://api.alquran.cloud/v1/ayah/${verseNum}/editions/quran-uthmani`, {
+              headers: { 'Accept': 'application/json' }
+            });
+            
+            if (!response.ok) return null;
+            
+            const data = await response.json();
+            if (data.code !== 200 || !data.data || !data.data.length) return null;
+            
+            const verseText = data.data[0].text;
+            if (!verseText) return null;
+            
+            // حساب تحليل كتاب مرقوم
+            const surahNumber = data.data[0].surah?.number || 0;
+            const ayahNumber = data.data[0].numberInSurah || 0;
+            if (!surahNumber || !ayahNumber) return null;
+            
+            const marqumAnalysis = analyzeVerseKitabMarqum(surahNumber, ayahNumber, verseText);
+            if (!marqumAnalysis || !marqumAnalysis.verseAnalysis) return null;
+            
+            // استخدام الدالة المساعدة لحساب نقاط التطابق
+            const { score, matches } = calculateMatchScore(verseNum, marqumAnalysis);
+            
+            return {
+              number: verseNum,
+              score: score,
+              matches: matches,
+              marqumAnalysis: marqumAnalysis
+            };
+          } catch (error) {
+            return null;
+          }
+        })()
+      );
+    }
+    
+    // تنفيذ البحث المتوازي (مع حد أقصى 5 طلبات متزامنة)
+    const results = [];
+    for (let i = 0; i < searchPromises.length; i += 5) {
+      const batch = searchPromises.slice(i, i + 5);
+      const batchResults = await Promise.all(batch);
+      results.push(...batchResults.filter(r => r !== null));
+      
+      // التحقق من وجود تطابق ممتاز
+      const excellentMatch = results.find(r => r.score >= 200);
+      if (excellentMatch) {
+        bestVerse = excellentMatch;
+        break;
+      }
+    }
+    
+    // تحديث أفضل آية من النتائج
+    results.forEach(result => {
+      if (result && result.score > bestVerse.score) {
+        bestVerse = result;
+      }
+    });
+    
+    return bestVerse;
+  };
+
   // حساب رقم الآية بناءً على النظام 19 والوقت والطاقة والرقم المختار والجُمَّل
   const calculateVerseNumber = (
     hours,
@@ -622,53 +814,78 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
           ayah: verseData.numberInSurah || 0,
           translation: translationData?.text || null,
           gregorianDate: meta.gregorianDate || null,
-          hijriDate: meta.hijriDate || null
+          hijriDate: meta.hijriDate || null,
+          perfectMatch: meta.perfectMatch || null // معلومات التطابق التام
         };
         
         setSelectedVerse(verse);
         
-        // حساب تحليل كتاب مرقوم للآية
-        if (verseData.text && verseData.surah?.number && verseData.numberInSurah) {
+        // استخدام تحليل كتاب مرقوم من الآية المثالية إذا كان متوفراً، وإلا احسبه
+        let marqumAnalysis = meta.perfectMatch?.marqumAnalysis || null;
+        
+        if (!marqumAnalysis && verseData.text && verseData.surah?.number && verseData.numberInSurah) {
           try {
-            const marqumAnalysis = analyzeVerseKitabMarqum(
+            marqumAnalysis = analyzeVerseKitabMarqum(
               verseData.surah.number,
               verseData.numberInSurah,
               verseData.text
             );
-            setKitabMarqumAnalysis(marqumAnalysis);
-            
-            // التحقق من التطابق الرقمي الشامل
-            if (meta.currentTime && meta.gregorianDate && meta.hijriDate) {
-              const now = meta.currentTime;
-              const hours = now.getHours();
-              const minutes = now.getMinutes();
-              const seconds = now.getSeconds();
-              const matches = checkNumericMatches(
-                hours,
-                minutes,
-                seconds,
-                verseNumber,
-                meta.gregorianDate,
-                meta.hijriDate,
-                marqumAnalysis,
-                selectedNumber
-              );
-              
-              if (matches && matches.length > 0) {
-                setNumericMatchAlert({
-                  matches: matches,
-                  timestamp: new Date()
-                });
-                // إخفاء الإشعار بعد 10 ثواني
-                setTimeout(() => {
-                  setNumericMatchAlert(null);
-                }, 10000);
-              }
-            }
           } catch (error) {
             console.error('Error analyzing Kitab Marqum:', error);
-            setKitabMarqumAnalysis(null);
+            marqumAnalysis = null;
           }
+        }
+        
+        if (marqumAnalysis) {
+          setKitabMarqumAnalysis(marqumAnalysis);
+          
+          // التحقق من التطابق الرقمي الشامل
+          if (meta.currentTime && meta.gregorianDate && meta.hijriDate) {
+            const now = meta.currentTime;
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const seconds = now.getSeconds();
+            const matches = checkNumericMatches(
+              hours,
+              minutes,
+              seconds,
+              verseNumber,
+              meta.gregorianDate,
+              meta.hijriDate,
+              marqumAnalysis,
+              selectedNumber
+            );
+            
+            // دمج التطابقات من الآية المثالية مع التطابقات المكتشفة
+            let allMatches = matches || [];
+            if (meta.perfectMatch && meta.perfectMatch.matches && meta.perfectMatch.matches.length > 0) {
+              // إضافة التطابقات من الآية المثالية
+              meta.perfectMatch.matches.forEach(match => {
+                if (typeof match === 'string') {
+                  allMatches.push({
+                    type: 'perfect_match',
+                    message: match,
+                    value: 0,
+                    matchType: 'perfect'
+                  });
+                }
+              });
+            }
+            
+            if (allMatches.length > 0) {
+              setNumericMatchAlert({
+                matches: allMatches,
+                timestamp: new Date(),
+                perfectMatch: meta.perfectMatch || null
+              });
+              // إخفاء الإشعار بعد 15 ثانية للتطابق التام
+              setTimeout(() => {
+                setNumericMatchAlert(null);
+              }, 15000);
+            }
+          }
+        } else {
+          setKitabMarqumAnalysis(null);
         }
         
         // إذا لم تكن هناك آية مثبتة، أو إذا كانت الآية المثبتة مختلفة، لا نغيرها
@@ -936,8 +1153,8 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
       priority: priority
     });
     
-    // حساب رقم الآية وجلبها من API (مع الأخذ في الاعتبار الرقم المختار والجُمَّل من الآية السابقة)
-    const verseNumber = calculateVerseNumber(
+    // حساب رقم الآية الأولي بناءً على النظام 19
+    const baseVerseNumber = calculateVerseNumber(
       hours,
       minutes,
       seconds,
@@ -951,7 +1168,37 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
       kitabMarqumAnalysis // تمرير تحليل كتاب مرقوم من الآية السابقة
     );
     
-    fetchVerseFromAPI(verseNumber, { gregorianDate, hijriDate, currentTime: time });
+    // البحث عن الآية المثالية مع التطابق التام
+    findPerfectMatchingVerse(
+      baseVerseNumber,
+      hours,
+      minutes,
+      seconds,
+      teslaEnergy.teslaScore,
+      teslaEnergy.blessedScore,
+      recommendations,
+      gregorianDate,
+      hijriDate,
+      selectedNumber,
+      selectedNumberInfo
+    ).then((perfectVerse) => {
+      // استخدام الآية المثالية دائماً إذا كان لها نقاط تطابق (حتى لو كانت قليلة، فهي أفضل من الآية الأولية العشوائية)
+      // إذا لم يكن هناك تطابق على الإطلاق (score === 0)، نستخدم الآية الأولية
+      const finalVerseNumber = perfectVerse.score > 0 ? perfectVerse.number : baseVerseNumber;
+      
+      // جلب الآية من API
+      // دائماً نمرر معلومات التطابق إذا كانت موجودة (score > 0)
+      fetchVerseFromAPI(finalVerseNumber, { 
+        gregorianDate, 
+        hijriDate, 
+        currentTime: time,
+        perfectMatch: perfectVerse.score > 0 ? perfectVerse : null
+      });
+    }).catch((error) => {
+      console.error('Error finding perfect verse:', error);
+      // في حالة الخطأ، استخدم الآية الأولية
+      fetchVerseFromAPI(baseVerseNumber, { gregorianDate, hijriDate, currentTime: time });
+    });
     
     setIsLoading(false);
   }, [analysis, selectedNumber, selectedNumberInfo]);
@@ -1560,6 +1807,26 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                     <span className="bg-purple-700/50 px-2 py-1 rounded">✨ بركة: {analysis.teslaEnergy.blessedScore}</span>
                     <span className="bg-purple-700/50 px-2 py-1 rounded">🔢 النظام: 19</span>
                   </div>
+                  {selectedVerse.perfectMatch && selectedVerse.perfectMatch.score >= 50 && (
+                    <div className="mt-3 p-3 bg-gradient-to-r from-yellow-900/60 to-orange-900/60 rounded-lg border-2 border-yellow-400/70">
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <Star className="w-5 h-5 text-yellow-300 fill-current animate-pulse" />
+                        <span className="text-yellow-200 font-bold text-sm sm:text-base">🎯 تطابق تام مكتشف!</span>
+                      </div>
+                      <div className="text-yellow-100 text-xs sm:text-sm mb-2">
+                        <span className="font-bold">نقاط التطابق: {selectedVerse.perfectMatch.score}</span>
+                      </div>
+                      {selectedVerse.perfectMatch.matches && selectedVerse.perfectMatch.matches.length > 0 && (
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {selectedVerse.perfectMatch.matches.slice(0, 5).map((match, idx) => (
+                            <div key={idx} className="bg-yellow-900/40 px-2 py-1 rounded text-xs text-yellow-200 text-center">
+                              {typeof match === 'string' ? match : match.message}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1682,28 +1949,79 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                       )}
                     </div>
 
-                    {/* التطابقات الرقمية */}
+                    {/* التطابقات الرقمية - العلاقة الموحدة */}
                     {numericMatchAlert && numericMatchAlert.matches && numericMatchAlert.matches.length > 0 && (
-                      <div className="bg-gradient-to-r from-green-800/40 to-emerald-800/40 rounded-lg p-4 border-2 border-green-400/70 shadow-xl">
-                        <h4 className="text-base sm:text-lg font-bold text-green-200 mb-3 text-center flex items-center justify-center gap-2">
-                          <Star className="w-5 h-5 fill-current animate-pulse" />
-                          🎯 التطابقات الرقمية المكتشفة
+                      <div className="bg-gradient-to-r from-green-800/40 via-emerald-800/40 to-teal-800/40 rounded-lg p-4 border-2 border-green-400/70 shadow-xl">
+                        <h4 className="text-base sm:text-lg font-bold text-green-200 mb-4 text-center flex items-center justify-center gap-2">
+                          <Star className="w-6 h-6 fill-current animate-pulse" />
+                          🎯 العلاقة الموحدة - التطابق التام
                         </h4>
-                        <div className="space-y-2">
+                        
+                        {/* ملخص العلاقة */}
+                        <div className="bg-green-900/60 rounded-lg p-4 mb-4 border border-green-300/50">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-center mb-3">
+                            <div>
+                              <div className="text-xs sm:text-sm text-green-300 mb-1">⏰ الوقت الحالي</div>
+                              <div className="text-xl sm:text-2xl font-bold text-green-100">
+                                {analysis.time.hours}:{String(analysis.time.minutes).padStart(2, '0')}:{String(analysis.time.seconds).padStart(2, '0')}
+                              </div>
+                            </div>
+                            {selectedVerse && (
+                              <div>
+                                <div className="text-xs sm:text-sm text-green-300 mb-1">📖 رقم الآية</div>
+                                <div className="text-xl sm:text-2xl font-bold text-green-100">
+                                  {selectedVerse.number}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {kitabMarqumAnalysis && kitabMarqumAnalysis.verseAnalysis && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
+                              <div>
+                                <div className="text-xs sm:text-sm text-green-300 mb-1">🔢 الجُمَّل الكلاسيكي</div>
+                                <div className="text-lg sm:text-xl font-bold text-green-100">
+                                  {kitabMarqumAnalysis.verseAnalysis.totalJumal} → {kitabMarqumAnalysis.verseAnalysis.reducedJumal}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs sm:text-sm text-green-300 mb-1">📊 الجُمَّل الترتيبي</div>
+                                <div className="text-lg sm:text-xl font-bold text-green-100">
+                                  {kitabMarqumAnalysis.verseAnalysis.totalSequential} → {kitabMarqumAnalysis.verseAnalysis.reducedSequential}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* التطابقات المكتشفة */}
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
                           {numericMatchAlert.matches.map((match, idx) => (
-                            <div key={idx} className="bg-green-900/50 rounded-lg p-3 border border-green-400/50">
-                              <p className="text-sm sm:text-base text-green-100 text-center font-semibold">
-                                {match.message}
+                            <div key={idx} className={`rounded-lg p-3 border ${
+                              match.matchType === 'perfect' 
+                                ? 'bg-yellow-900/60 border-yellow-400/70' 
+                                : 'bg-green-900/50 border-green-400/50'
+                            }`}>
+                              <p className={`text-sm sm:text-base text-center font-semibold ${
+                                match.matchType === 'perfect' ? 'text-yellow-100' : 'text-green-100'
+                              }`}>
+                                {typeof match === 'string' ? match : match.message}
+                                {match.matchType === 'perfect' && ' ⭐'}
                               </p>
                             </div>
                           ))}
                         </div>
-                        <div className="mt-3 text-xs text-green-300 text-center">
-                          <p>⏰ الوقت: {analysis.time.hours}:{String(analysis.time.minutes).padStart(2, '0')}</p>
-                          {selectedVerse && (
-                            <p className="mt-1">📖 رقم الآية: {selectedVerse.number}</p>
-                          )}
-                        </div>
+                        
+                        {/* معلومات إضافية */}
+                        {numericMatchAlert.perfectMatch && numericMatchAlert.perfectMatch.score >= 50 && (
+                          <div className="mt-3 p-3 bg-yellow-900/40 rounded-lg border border-yellow-400/50">
+                            <div className="text-xs sm:text-sm text-yellow-200 text-center">
+                              <p className="font-bold mb-1">✨ تطابق تام مكتشف!</p>
+                              <p>نقاط التطابق: <span className="font-bold text-yellow-100">{numericMatchAlert.perfectMatch.score}</span></p>
+                              <p className="mt-2 text-xs">تم البحث في نطاق ±200 آية للعثور على هذه الآية المثالية</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
