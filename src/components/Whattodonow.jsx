@@ -1668,24 +1668,54 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
         </div>
       )}
 
-      {/* إشعار التطابق الرقمي */}
+      {/* إشعار التطابق الرقمي - محسّن لعرض المزيد من التطابقات */}
       {numericMatchAlert && numericMatchAlert.matches && numericMatchAlert.matches.length > 0 && (
-        <div className="fixed top-20 sm:top-24 left-1/2 transform -translate-x-1/2 z-50 px-2 w-full max-w-lg animate-pulse">
+        <div className="fixed top-20 sm:top-24 left-1/2 transform -translate-x-1/2 z-50 px-2 w-full max-w-2xl animate-pulse">
           <div className="bg-gradient-to-r from-yellow-600 via-orange-600 to-red-600 text-white px-4 py-3 sm:px-6 sm:py-4 rounded-2xl shadow-2xl border-2 border-yellow-300">
             <div className="flex items-start gap-3">
               <Star className="w-6 h-6 sm:w-8 sm:h-8 animate-spin flex-shrink-0 mt-1 fill-current" />
               <div className="flex-1">
-                <h4 className="font-bold text-base sm:text-lg mb-2">🎯 تطابق رقمي مذهل!</h4>
-                <div className="space-y-2">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-bold text-base sm:text-lg">🎯 تطابق رقمي مذهل!</h4>
+                  {numericMatchAlert.perfectMatch && (
+                    <span className="text-xs sm:text-sm bg-yellow-400/30 px-2 py-1 rounded-full">
+                      نقاط: {numericMatchAlert.perfectMatch.score}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs sm:text-sm text-yellow-100 mb-3 text-center">
+                  ({numericMatchAlert.matches.length} تطابق مكتشف)
+                </div>
+                <div className="space-y-2 max-h-96 overflow-y-auto bg-white/10 rounded-lg p-2 border border-white/20">
                   {numericMatchAlert.matches.map((match, idx) => (
-                    <div key={idx} className="bg-white/20 rounded-lg p-2 sm:p-3 text-sm sm:text-base">
-                      <p className="font-semibold">{match.message}</p>
+                    <div 
+                      key={idx} 
+                      className={`rounded-lg p-2 sm:p-3 text-xs sm:text-sm ${
+                        match.matchType === 'perfect' 
+                          ? 'bg-yellow-500/40 border border-yellow-300/50' 
+                          : 'bg-white/20 border border-white/30'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="font-bold text-yellow-200 min-w-[25px]">{idx + 1}.</span>
+                        <p className="font-semibold flex-1 text-right">
+                          {typeof match === 'string' ? match : match.message}
+                          {match.matchType === 'perfect' && ' ⭐'}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
+                {numericMatchAlert.perfectMatch && numericMatchAlert.perfectMatch.matches && numericMatchAlert.perfectMatch.matches.length > 0 && (
+                  <div className="mt-3 p-2 bg-yellow-500/30 rounded-lg border border-yellow-300/50">
+                    <div className="text-xs text-center text-yellow-100">
+                      ✨ تطابق تام: {numericMatchAlert.perfectMatch.matches.length} تطابق إضافي من الآية المثالية
+                    </div>
+                  </div>
+                )}
                 <button
                   onClick={() => setNumericMatchAlert(null)}
-                  className="mt-3 text-xs sm:text-sm underline hover:no-underline opacity-80 hover:opacity-100"
+                  className="mt-3 w-full text-xs sm:text-sm bg-white/20 hover:bg-white/30 rounded-lg py-2 transition-colors font-semibold"
                 >
                   إغلاق
                 </button>
@@ -2113,7 +2143,7 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                               <p className="text-xs text-yellow-300 mt-1">
                                 ({numericMatchAlert.perfectMatch.matches?.length || 0} تطابق مكتشف)
                               </p>
-                              <p className="mt-2 text-xs text-yellow-300">تم البحث في نطاق ±100 آية للعثور على هذه الآية المثالية</p>
+                              <p className="mt-2 text-xs text-yellow-300">تم البحث في نطاق ±150 آية للعثور على هذه الآية المثالية</p>
                             </div>
                             {numericMatchAlert.perfectMatch.matches && numericMatchAlert.perfectMatch.matches.length > 0 && (
                               <div className="space-y-2 max-h-64 overflow-y-auto bg-yellow-950/30 rounded-lg p-2 border border-yellow-600/30 mt-3">
