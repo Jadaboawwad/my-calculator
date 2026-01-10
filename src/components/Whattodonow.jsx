@@ -255,7 +255,12 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
             const marqumAnalysis = analyzeVerseKitabMarqum(surahNumber, ayahNumber, baseData.data[0].text);
             if (marqumAnalysis && marqumAnalysis.verseAnalysis) {
               const { score, matches } = calculateMatchScore(baseVerseNumber, marqumAnalysis);
-              if (score > bestVerse.score) {
+              const matchesCount = matches?.length || 0;
+              const bestMatchesCount = bestVerse.matches?.length || 0;
+              
+              // تحديث أفضل آية بناءً على عدد التطابقات أولاً
+              if (matchesCount > bestMatchesCount || 
+                  (matchesCount === bestMatchesCount && score > bestVerse.score)) {
                 bestVerse = { number: baseVerseNumber, score, matches, marqumAnalysis };
               }
             }
@@ -319,19 +324,44 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
       const batch = searchPromises.slice(i, i + 5);
       const batchResults = await Promise.all(batch);
       results.push(...batchResults.filter(r => r !== null));
-      
-      // التحقق من وجود تطابق ممتاز (تم تقليل العتبة للحصول على المزيد من التطابقات)
-      const excellentMatch = results.find(r => r.score >= 150);
-      if (excellentMatch) {
-        bestVerse = excellentMatch;
-        // لا نتوقف فوراً، نستمر في البحث للحصول على أفضل تطابق
-      }
     }
     
-    // تحديث أفضل آية من النتائج
+    // ترتيب النتائج بناءً على عدد التطابقات أولاً، ثم النقاط
+    results.sort((a, b) => {
+      const aMatches = a?.matches?.length || 0;
+      const bMatches = b?.matches?.length || 0;
+      
+      // الأولوية لأكبر عدد تطابقات
+      if (aMatches !== bMatches) {
+        return bMatches - aMatches; // ترتيب تنازلي (الأكبر أولاً)
+      }
+      
+      // إذا كان نفس عدد التطابقات، نرتب حسب النقاط
+      return (b?.score || 0) - (a?.score || 0);
+    });
+    
+    // تحديث أفضل آية من النتائج - الأولوية لأكبر عدد تطابقات
     results.forEach(result => {
-      if (result && result.score > bestVerse.score) {
-        bestVerse = result;
+      if (result) {
+        const resultMatchesCount = result.matches?.length || 0;
+        const bestMatchesCount = bestVerse.matches?.length || 0;
+        
+        // أولاً: اختر الآية التي لديها أكبر عدد تطابقات
+        if (resultMatchesCount > bestMatchesCount) {
+          bestVerse = result;
+        }
+        // ثانياً: إذا كانت نفس عدد التطابقات، اختر التي لديها أعلى نقاط
+        else if (resultMatchesCount === bestMatchesCount && result.score > bestVerse.score) {
+          bestVerse = result;
+        }
+        // ثالثاً: إذا كان عدد التطابقات أقل ولكن النقاط أعلى بكثير جداً (أكثر من 100 نقطة)
+        // فقط في هذه الحالة نفضل النقاط على عدد التطابقات
+        else if (resultMatchesCount < bestMatchesCount && 
+                 bestMatchesCount > 0 && // لا نفضل النقاط إذا لم يكن هناك تطابقات أصلاً
+                 result.score > bestVerse.score + 100) {
+          // نفضل الآية التي لديها نقاط أعلى بكثير جداً فقط
+          bestVerse = result;
+        }
       }
     });
     
@@ -1260,17 +1290,22 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
       selectedNumber,
       selectedNumberInfo
     ).then((perfectVerse) => {
-      // استخدام الآية المثالية دائماً إذا كان لها نقاط تطابق (حتى لو كانت قليلة، فهي أفضل من الآية الأولية العشوائية)
-      // إذا لم يكن هناك تطابق على الإطلاق (score === 0)، نستخدم الآية الأولية
-      const finalVerseNumber = perfectVerse.score > 0 ? perfectVerse.number : baseVerseNumber;
+      // استخدام الآية المثالية إذا كان لها تطابقات (عدد تطابقات > 0)
+      // الأولوية للآية التي لديها أكبر عدد تطابقات
+      const hasMatches = perfectVerse.matches && perfectVerse.matches.length > 0;
+      const hasScore = perfectVerse.score > 0;
+      
+      // نستخدم الآية المثالية إذا كان لديها تطابقات أو نقاط
+      // لكن نفضل الآية التي لديها تطابقات حتى لو كانت النقاط قليلة
+      const finalVerseNumber = (hasMatches || hasScore) ? perfectVerse.number : baseVerseNumber;
       
       // جلب الآية من API
-      // دائماً نمرر معلومات التطابق إذا كانت موجودة (score > 0)
+      // نمرر معلومات التطابق إذا كان هناك تطابقات أو نقاط
       fetchVerseFromAPI(finalVerseNumber, { 
         gregorianDate, 
         hijriDate, 
         currentTime: time,
-        perfectMatch: perfectVerse.score > 0 ? perfectVerse : null
+        perfectMatch: (hasMatches || hasScore) ? perfectVerse : null
       });
     }).catch((error) => {
       console.error('Error finding perfect verse:', error);
@@ -1806,7 +1841,7 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xl sm:text-2xl font-bold text-purple-300 flex items-center justify-center gap-2 flex-1">
                 <BookOpen className="w-6 h-6 sm:w-8 sm:h-8" />
-                📖 الآية المختارة لك الآن (بناءً على النظام 19)
+                📖 الآية المختارة لك الآن (أكبر عدد تطابقات - النظام 19)
                 {pinnedVerse && pinnedVerse.number === selectedVerse.number && (
                   <Pin className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-400 fill-current" />
                 )}
@@ -1836,6 +1871,20 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
             <p className="text-sm sm:text-base text-purple-200 mt-2">
               الآية رقم {selectedVerse.number} من أصل 6236 آية
             </p>
+            {selectedVerse.perfectMatch && selectedVerse.perfectMatch.matches && selectedVerse.perfectMatch.matches.length > 0 && (
+              <div className="mt-3 p-3 bg-gradient-to-r from-green-900/40 to-emerald-900/40 rounded-lg border border-green-400/50">
+                <p className="text-sm sm:text-base text-green-200 text-center font-bold mb-1">
+                  🎯 تم اختيار هذه الآية لأنها تحتوي على أكبر عدد تطابقات
+                </p>
+                <p className="text-xs sm:text-sm text-green-300 text-center">
+                  عدد التطابقات: <span className="font-bold text-green-100 text-base">{selectedVerse.perfectMatch.matches.length}</span> تطابق | 
+                  النقاط: <span className="font-bold text-green-100 text-base">{selectedVerse.perfectMatch.score}</span>
+                </p>
+                <p className="text-xs text-green-400 text-center mt-1">
+                  تم البحث في نطاق ±150 آية من الآية الأولية
+                </p>
+              </div>
+            )}
             {selectedNumber && selectedNumberInfo && (
               <div className="mt-3 p-3 bg-gradient-to-r from-yellow-900/40 to-orange-900/40 rounded-lg border border-yellow-400/50">
                 <p className="text-sm sm:text-base text-yellow-200 text-center">
@@ -1915,6 +1964,14 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                     <span className="bg-purple-700/50 px-2 py-1 rounded">✨ بركة: {analysis.teslaEnergy.blessedScore}</span>
                     <span className="bg-purple-700/50 px-2 py-1 rounded">🔢 النظام: 19</span>
                   </div>
+                  {selectedVerse.perfectMatch && selectedVerse.perfectMatch.matches && (
+                    <div className="mt-2 pt-2 border-t border-indigo-500/30">
+                      <p className="text-yellow-300 font-bold text-sm">
+                        🎯 معيار الاختيار: <span className="text-yellow-200">أكبر عدد تطابقات ({selectedVerse.perfectMatch.matches.length} تطابق)</span>
+                      </p>
+                      <p className="text-xs text-indigo-300 mt-1">تم البحث في ±150 آية واختيار الآية التي لديها أكبر عدد تطابقات رقمية</p>
+                    </div>
+                  )}
                   {selectedVerse.perfectMatch && selectedVerse.perfectMatch.score >= 20 && (
                     <div className="mt-3 p-4 bg-gradient-to-r from-yellow-900/60 to-orange-900/60 rounded-lg border-2 border-yellow-400/70 shadow-lg">
                       <div className="flex items-center justify-center gap-2 mb-3">
