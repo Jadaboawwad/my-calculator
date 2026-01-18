@@ -83,7 +83,7 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
     selectedNumberInfo = null
   ) => {
     const TOTAL_VERSES = 6236;
-    const SEARCH_RANGE = 150; // البحث في نطاق ±150 آية للحصول على المزيد من التطابقات
+    const SEARCH_RANGE = 50; // تقليل النطاق لتجنب Rate Limiting من API
     const MIN_START = Math.max(1, baseVerseNumber - SEARCH_RANGE);
     const MAX_END = Math.min(TOTAL_VERSES, baseVerseNumber + SEARCH_RANGE);
     
@@ -271,9 +271,10 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
       console.warn('Error checking base verse:', error);
     }
     
-    // البحث في النطاق (بخطوة أصغر للحصول على المزيد من التطابقات)
+    // البحث في النطاق (بخطوة أكبر لتقليل عدد الطلبات)
     const searchPromises = [];
-    const searchStep = Math.max(3, Math.floor(SEARCH_RANGE * 2 / 50)); // البحث في 50 آية تقريباً للحصول على المزيد من التطابقات
+    const MAX_SEARCH_VERSE_COUNT = 15; // تقليل عدد الآيات المفحوصة لتجنب Rate Limiting
+    const searchStep = Math.max(5, Math.floor((SEARCH_RANGE * 2) / MAX_SEARCH_VERSE_COUNT));
     
     for (let verseNum = MIN_START; verseNum <= MAX_END; verseNum += searchStep) {
       // تجنب فحص الآية الأولية مرة أخرى
@@ -285,6 +286,12 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
             const response = await fetch(`https://api.alquran.cloud/v1/ayah/${verseNum}/editions/quran-uthmani`, {
               headers: { 'Accept': 'application/json' }
             });
+            
+            // معالجة Rate Limiting (429)
+            if (response.status === 429) {
+              console.warn(`Rate limit exceeded for verse ${verseNum}`);
+              return null;
+            }
             
             if (!response.ok) return null;
             
@@ -318,12 +325,20 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
       );
     }
     
-    // تنفيذ البحث المتوازي (مع حد أقصى 5 طلبات متزامنة)
+    // تنفيذ البحث المتوازي (مع حد أقصى 2 طلبات متزامنة لتجنب Rate Limiting)
     const results = [];
-    for (let i = 0; i < searchPromises.length; i += 5) {
-      const batch = searchPromises.slice(i, i + 5);
+    const BATCH_SIZE = 2; // تقليل batch size لتجنب 429 errors
+    const BATCH_DELAY = 300; // تأخير 300ms بين الـ batches
+    
+    for (let i = 0; i < searchPromises.length; i += BATCH_SIZE) {
+      const batch = searchPromises.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.all(batch);
       results.push(...batchResults.filter(r => r !== null));
+      
+      // إضافة تأخير بين الـ batches لتجنب Rate Limiting
+      if (i + BATCH_SIZE < searchPromises.length) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+      }
     }
     
     // ترتيب النتائج بناءً على عدد التطابقات أولاً، ثم النقاط
