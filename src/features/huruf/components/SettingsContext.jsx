@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
   normalizeOptions: DEFAULT_NORMALIZE_OPTIONS,
   planetSchemeId: DEFAULT_PLANET_SCHEME_ID,
   valueSchemeId: DEFAULT_VALUE_SCHEME_ID,
+  disclosureLevel: 'beginner',
 };
 
 function loadSettings() {
@@ -20,6 +21,7 @@ function loadSettings() {
       normalizeOptions: { ...DEFAULT_NORMALIZE_OPTIONS, ...(parsed.normalizeOptions || {}) },
       planetSchemeId: parsed.planetSchemeId || DEFAULT_PLANET_SCHEME_ID,
       valueSchemeId: parsed.valueSchemeId || DEFAULT_VALUE_SCHEME_ID,
+      disclosureLevel: parsed.disclosureLevel === 'advanced' ? 'advanced' : 'beginner',
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -46,6 +48,8 @@ export function HurufSettingsProvider({ children }) {
         setSettings((s) => ({ ...s, normalizeOptions: { ...s.normalizeOptions, ...patch } })),
       setPlanetSchemeId: (id) => setSettings((s) => ({ ...s, planetSchemeId: id })),
       setValueSchemeId: (id) => setSettings((s) => ({ ...s, valueSchemeId: id })),
+      setDisclosureLevel: (level) =>
+        setSettings((s) => ({ ...s, disclosureLevel: level === 'advanced' ? 'advanced' : 'beginner' })),
       resetSettings: () => setSettings(DEFAULT_SETTINGS),
       // خيارات جاهزة للتمرير مباشرة إلى دوال lib/jummal.js وغيرها
       computeOptions: { ...settings.normalizeOptions, valueScheme: settings.valueSchemeId },

@@ -1,26 +1,24 @@
 import React, { useState } from 'react';
 import { HurufSettingsProvider } from './SettingsContext';
-import HurufDashboard from './HurufDashboard';
+import ReductionUnifier from './ReductionUnifier';
 import OperationsPanel from './OperationsPanel';
-import ChronogramTool from './ChronogramTool';
-import MizanTool from './MizanTool';
+import QuranNumericPanel from './QuranNumericPanel';
 import LearnMode from './LearnMode';
 import SettingsPanel from './SettingsPanel';
 import AboutPanel from './AboutPanel';
 
 const SECTIONS = [
-  { id: 'dashboard', label: 'لوحة التحليل', Comp: HurufDashboard },
+  { id: 'unifier', label: 'موحّد الاختزال', Comp: ReductionUnifier },
   { id: 'operations', label: 'العمليات', Comp: OperationsPanel },
-  { id: 'chronogram', label: 'التأريخ الشعري', Comp: ChronogramTool },
-  { id: 'mizan', label: 'الموازنة', Comp: MizanTool },
+  { id: 'quran', label: 'الوحدة القرآنية', Comp: QuranNumericPanel },
   { id: 'learn', label: 'تعلّم المنظومة', Comp: LearnMode },
   { id: 'settings', label: 'الإعدادات', Comp: SettingsPanel },
   { id: 'about', label: 'عن هذا العلم', Comp: AboutPanel },
 ];
 
 function HurufModuleInner() {
-  const [section, setSection] = useState('dashboard');
-  const Active = SECTIONS.find((s) => s.id === section)?.Comp || HurufDashboard;
+  const [section, setSection] = useState('unifier');
+  const Active = SECTIONS.find((s) => s.id === section)?.Comp || ReductionUnifier;
 
   return (
     <div
@@ -29,8 +27,10 @@ function HurufModuleInner() {
       style={{ background: '#F5EEDD', color: '#2B2118', fontFamily: '"IBM Plex Sans Arabic","Segoe UI",sans-serif' }}
     >
       <header className="border-b border-[#D9CBA6] bg-[#2B2118] px-4 py-3 text-[#F5EEDD]">
-        <h1 className="text-lg font-bold">نطاق الحروف — علم الحروف (دراسة تراثية)</h1>
-        <p className="text-xs text-[#D9CBA6]">أداة دراسة وحساب على منظومة أصول علم الحرف — حسب المصادر التراثية فقط</p>
+        <h1 className="text-lg font-bold">موحّد الاختزال — نطاق الحروف (دراسة تراثية)</h1>
+        <p className="text-xs text-[#D9CBA6]">
+          محرك اختزال واحد على ثلاث مقاييس: كلمة، نص، زمن — الآية المتنبأ بها مدخل المحرك
+        </p>
       </header>
 
       <nav className="flex flex-wrap gap-1 border-b border-[#D9CBA6] bg-white px-2 py-2">
