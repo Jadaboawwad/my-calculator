@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Clock, Star, TrendingUp, Lightbulb, AlertCircle, BookOpen, Sparkles, Zap, Pin, PinOff, ChevronDown, ChevronUp, ExternalLink, Calculator } from 'lucide-react';
 import { getNumberInfo, getNearestNumberInfo, calculateNumberEnergy } from './../../Quranicnumbersdatabase';
 import { analyzeVerseKitabMarqum, getSurahMuqattaatInfo, jumalStandard, sequentialOrder, reduceToSingleDigit } from './../../KitabMarqumSystem';
+import { calculateHurufVerseNumber, isqat } from '../features/huruf';
 
 const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -210,23 +211,23 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
         if (selectedReduced === minuteReduced) { matchScore += 65; matches.push(`⭐ اختزال الرقم المختار (${selectedReduced}) = اختزال الدقيقة (${minuteReduced})`); }
       }
       
-      // تطابقات خاصة - أرقام مقدسة (مفصلة)
-      const specialNumbers = [3, 6, 7, 9, 19];
-      specialNumbers.forEach(specialNum => {
-        if (totalJumal === specialNum) { matchScore += 30; matches.push(`✨ الجُمَّل الكلاسيكي الكامل (${totalJumal}) = الرقم المقدس ${specialNum}`); }
-        if (totalSequential === specialNum) { matchScore += 30; matches.push(`✨ الجُمَّل الترتيبي الكامل (${totalSequential}) = الرقم المقدس ${specialNum}`); }
-        if (reducedJumal === specialNum) { matchScore += 30; matches.push(`✨ اختزال الجُمَّل الكلاسيكي (${reducedJumal}) = الرقم المقدس ${specialNum}`); }
-        if (reducedSequential === specialNum) { matchScore += 30; matches.push(`✨ اختزال الجُمَّل الترتيبي (${reducedSequential}) = الرقم المقدس ${specialNum}`); }
-        // تطابقات مع الوقت
-        if (hours === specialNum || minutes === specialNum || seconds === specialNum) {
-          matchScore += 25; matches.push(`✨ الوقت يحتوي على الرقم المقدس ${specialNum}`);
+      // تطابقات خاصة — إسقاطات نطاق الحروف (٤ طبائع، ٧ كواكب، ٩ مراتب، ١٢ بروج، ٢٨ منازل)
+      const hurufModuli = [4, 7, 9, 12, 28];
+      hurufModuli.forEach((modulus) => {
+        const jumalIsqat = isqat(totalJumal, modulus);
+        const seqIsqat = isqat(totalSequential, modulus);
+        const timeIsqat = isqat(timeSum, modulus);
+        if (jumalIsqat === hourReduced || jumalIsqat === minuteReduced) {
+          matchScore += 28;
+          matches.push(`🔤 إسقاط ${modulus} للجُمَّل (${jumalIsqat}) يطابق اختزال الوقت`);
         }
-        if (hourReduced === specialNum || minuteReduced === specialNum || secondReduced === specialNum) {
-          matchScore += 20; matches.push(`✨ اختزال الوقت يحتوي على الرقم المقدس ${specialNum}`);
+        if (seqIsqat === hourReduced || seqIsqat === minuteReduced) {
+          matchScore += 28;
+          matches.push(`🔤 إسقاط ${modulus} للجُمَّل الترتيبي (${seqIsqat}) يطابق اختزال الوقت`);
         }
-        // تطابقات مع رقم الآية
-        if (verseNum === specialNum || verseReduced === specialNum) {
-          matchScore += 25; matches.push(`✨ رقم الآية يحتوي على الرقم المقدس ${specialNum}`);
+        if (jumalIsqat === timeIsqat) {
+          matchScore += 25;
+          matches.push(`🔤 إسقاط ${modulus}: الجُمَّل (${jumalIsqat}) = مجموع الوقت (${timeIsqat})`);
         }
       });
       
@@ -381,202 +382,6 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
     });
     
     return bestVerse;
-  };
-
-  // حساب رقم الآية بناءً على النظام 19 والوقت والطاقة والرقم المختار والجُمَّل
-  const calculateVerseNumber = (
-    hours,
-    minutes,
-    seconds,
-    teslaScore,
-    blessedScore,
-    recommendations,
-    gregorianDate,
-    hijriDate,
-    selectedNumber = null,
-    selectedNumberInfo = null,
-    previousMarqumAnalysis = null // تحليل كتاب مرقوم من الآية السابقة
-  ) => {
-    const TOTAL_VERSES = 6236; // إجمالي آيات القرآن
-    const MAGIC_NUMBER = 19; // الرقم 19 المقدس
-    
-    // حساب الأساس من الوقت (باستخدام عدة عوامل)
-    const timeInSeconds = (hours * 3600) + (minutes * 60) + seconds;
-    const timeInMinutes = (hours * 60) + minutes;
-    const timeProduct = hours * minutes * seconds;
-    
-    // حساب عامل من طاقة تسلا (مضاعف قوي باستخدام 19)
-    const teslaFactor = teslaScore * MAGIC_NUMBER * (teslaScore > 0 ? 2 : 1);
-    
-    // حساب عامل من البركة (مضاعف باستخدام 7)
-    const blessedFactor = blessedScore * 7 * (blessedScore > 0 ? 3 : 1);
-    
-    // حساب عامل من التوصيات (استخدام أرقام التوصيات والأولوية)
-    let recommendationsFactor = 0;
-    if (recommendations && recommendations.length > 0) {
-      recommendations.forEach(rec => {
-        const priorityWeight = rec.priority || 1;
-        recommendationsFactor += rec.number * priorityWeight * MAGIC_NUMBER;
-      });
-    }
-    
-    // حساب عامل من الرقم المختار (إذا كان موجوداً)
-    let selectedNumberFactor = 0;
-    if (selectedNumber && selectedNumberInfo) {
-      const numValue = Number(selectedNumber) || 0;
-      
-      // إذا كان الرقم المختار موجوداً في قاعدة البيانات
-      if (selectedNumberInfo.verses && selectedNumberInfo.verses.length > 0) {
-        // استخدام عدد الآيات المرتبطة بالرقم
-        const versesCount = selectedNumberInfo.verses.length;
-        selectedNumberFactor = numValue * versesCount * MAGIC_NUMBER;
-        
-        // إضافة عامل من الطاقة إذا كانت عالية
-        if (selectedNumberInfo.energy) {
-          const energyLevel = selectedNumberInfo.energy.level;
-          if (energyLevel === 'very_high' || energyLevel === 'divine') {
-            selectedNumberFactor += numValue * MAGIC_NUMBER * 3;
-          } else if (energyLevel === 'blessed' || energyLevel === 'high') {
-            selectedNumberFactor += numValue * MAGIC_NUMBER * 2;
-          } else {
-            selectedNumberFactor += numValue * MAGIC_NUMBER;
-          }
-        }
-        
-        // إذا كان الرقم من أرقام تسلا (3، 6، 9)
-        const numReduced = numValue > 9 ? numValue % 10 : numValue;
-        if ([3, 6, 9].includes(numReduced) || [3, 6, 9].includes(numValue)) {
-          selectedNumberFactor += numValue * MAGIC_NUMBER * 2;
-        }
-        
-        // إذا كان الرقم 7 (مبارك)
-        if (numValue === 7 || numReduced === 7) {
-          selectedNumberFactor += numValue * 7 * 3;
-        }
-      } else {
-        // إذا لم يكن موجوداً في قاعدة البيانات، استخدم القيمة مباشرة
-        selectedNumberFactor = numValue * MAGIC_NUMBER;
-      }
-    }
-    
-    // حساب عوامل إضافية من الوقت
-    const hourMinuteSum = hours + minutes;
-    const minuteSecondSum = minutes + seconds;
-    const totalTimeSum = hours + minutes + seconds;
-    
-    // حساب عوامل التاريخ (ميلادي وهجري)
-    const { year: gYear = 0, month: gMonth = 0, day: gDay = 0 } = gregorianDate || {};
-    const { year: hYear = 0, month: hMonth = 0, day: hDay = 0 } = hijriDate || {};
-    
-    const gregorianSum = gYear + gMonth + gDay;
-    const hijriSum = hYear + hMonth + hDay;
-    const dateDifference = Math.abs(gYear - hYear);
-    
-    const gregorianFactor = (gregorianSum * MAGIC_NUMBER) + ((gYear % 100) * 7);
-    const hijriFactor = (hijriSum * 7 * 2) + ((hYear % 100) * MAGIC_NUMBER);
-    const dateProduct = (Math.max(gDay, 1) * Math.max(hDay, 1) * MAGIC_NUMBER);
-    const combinedDateFactor = gregorianFactor + hijriFactor + (dateDifference * 11);
-    
-    // === حساب عوامل الجُمَّل من الآية السابقة ===
-    let jumalClassicalFactor = 0;
-    let jumalSequentialFactor = 0;
-    let jumalReducedFactor = 0;
-    let sequentialReducedFactor = 0;
-    let muqattaatFactor = 0;
-    
-    if (previousMarqumAnalysis && previousMarqumAnalysis.verseAnalysis) {
-      const verseAnalysis = previousMarqumAnalysis.verseAnalysis;
-      
-      // الجُمَّل الكلاسيكي
-      if (verseAnalysis.totalJumal > 0) {
-        jumalClassicalFactor = verseAnalysis.totalJumal * MAGIC_NUMBER;
-        jumalReducedFactor = verseAnalysis.reducedJumal * MAGIC_NUMBER * 2;
-      }
-      
-      // الجُمَّل الترتيبي
-      if (verseAnalysis.totalSequential > 0) {
-        jumalSequentialFactor = verseAnalysis.totalSequential * MAGIC_NUMBER;
-        sequentialReducedFactor = verseAnalysis.reducedSequential * MAGIC_NUMBER * 2;
-      }
-      
-      // الحروف المقطعة (إذا كانت موجودة)
-      if (previousMarqumAnalysis.muqattaatAnalysis && 
-          previousMarqumAnalysis.muqattaatAnalysis.analysis) {
-        const muqattaatAnalysis = previousMarqumAnalysis.muqattaatAnalysis.analysis;
-        if (muqattaatAnalysis.totalJumal > 0) {
-          muqattaatFactor = muqattaatAnalysis.totalJumal * MAGIC_NUMBER * 3;
-        }
-      }
-    }
-    
-    // === حساب عوامل عجيبة 19 ===
-    // استخدام 19 بطرق متعددة
-    const miracle19Factor1 = MAGIC_NUMBER * MAGIC_NUMBER; // 19² = 361
-    const miracle19Factor2 = reduceToSingleDigit(MAGIC_NUMBER * hours); // اختزال 19 × الساعة
-    const miracle19Factor3 = reduceToSingleDigit(MAGIC_NUMBER * minutes); // اختزال 19 × الدقيقة
-    const miracle19Factor4 = (MAGIC_NUMBER * gDay) % 100; // 19 × اليوم الميلادي
-    const miracle19Factor5 = (MAGIC_NUMBER * hDay) % 100; // 19 × اليوم الهجري
-    const miracle19Factor6 = reduceToSingleDigit(MAGIC_NUMBER * (gYear % 100)); // اختزال 19 × آخر رقمين من السنة
-    const miracle19Factor7 = reduceToSingleDigit(MAGIC_NUMBER * (hYear % 100)); // اختزال 19 × آخر رقمين من السنة الهجرية
-    
-    const combinedMiracle19Factor = (
-      miracle19Factor1 +
-      miracle19Factor2 * 10 +
-      miracle19Factor3 * 5 +
-      miracle19Factor4 +
-      miracle19Factor5 +
-      miracle19Factor6 * 7 +
-      miracle19Factor7 * 7
-    ) * MAGIC_NUMBER;
-    
-    // حساب رقم الآية النهائي باستخدام صيغة متقدمة
-    // الصيغة: (وقت × عوامل + تسلا × 19² + بركة × 7² + توصيات × 19 + رقم مختار × 19 + جُمَّل × 19 + عجيبة 19) modulo 6236
-    let verseNumber = (
-      timeInSeconds +
-      (timeInMinutes * 10) +
-      (timeProduct % 1000) +
-      (hourMinuteSum * 100) +
-      (minuteSecondSum * 50) +
-      (totalTimeSum * 25) +
-      combinedDateFactor +
-      dateProduct +
-      teslaFactor +
-      blessedFactor +
-      recommendationsFactor +
-      selectedNumberFactor + // إضافة عامل الرقم المختار
-      jumalClassicalFactor + // الجُمَّل الكلاسيكي من الآية السابقة
-      jumalSequentialFactor + // الجُمَّل الترتيبي من الآية السابقة
-      jumalReducedFactor + // اختزال الجُمَّل الكلاسيكي
-      sequentialReducedFactor + // اختزال الجُمَّل الترتيبي
-      muqattaatFactor + // الحروف المقطعة
-      combinedMiracle19Factor + // عوامل عجيبة 19
-      (MAGIC_NUMBER * 19) // عامل ثابت من النظام 19
-    ) % TOTAL_VERSES;
-    
-    // التأكد من أن الرقم بين 1 و 6236
-    if (verseNumber === 0) {
-      verseNumber = TOTAL_VERSES; // إذا كان 0، استخدم آخر آية
-    } else if (verseNumber < 1) {
-      verseNumber = Math.abs(verseNumber) % TOTAL_VERSES + 1;
-    }
-    
-    // تطبيق تعديل نهائي بناءً على الطاقة
-    if (teslaScore >= 5 || blessedScore >= 3) {
-      // إذا كانت الطاقة عالية، أضف تعديل طفيف
-      verseNumber = (verseNumber + (teslaScore + blessedScore)) % TOTAL_VERSES;
-      if (verseNumber === 0) verseNumber = TOTAL_VERSES;
-    }
-    
-    // تعديل إضافي إذا كان هناك رقم مختار
-    if (selectedNumber && selectedNumberInfo && selectedNumberInfo.energy) {
-      const energyLevel = selectedNumberInfo.energy.level;
-      if (energyLevel === 'very_high' || energyLevel === 'divine') {
-        verseNumber = (verseNumber + Number(selectedNumber) + 19) % TOTAL_VERSES;
-        if (verseNumber === 0) verseNumber = TOTAL_VERSES;
-      }
-    }
-    
-    return Math.floor(verseNumber);
   };
 
   // دالة حساب رقم اليوم في السنة
@@ -938,7 +743,8 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
           translation: translationData?.text || null,
           gregorianDate: meta.gregorianDate || null,
           hijriDate: meta.hijriDate || null,
-          perfectMatch: meta.perfectMatch || null // معلومات التطابق التام
+          perfectMatch: meta.perfectMatch || null,
+          hurufMeta: meta.hurufMeta || null,
         };
         
         setSelectedVerse(verse);
@@ -1276,20 +1082,16 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
       priority: priority
     });
     
-    // حساب رقم الآية الأولي بناءً على النظام 19
-    const baseVerseNumber = calculateVerseNumber(
+    // حساب رقم الآية الأولي وفق نطاق الحروف (استنطاق + جُمَّل + إسقاطات)
+    const { verseNumber: baseVerseNumber, hurufMeta } = calculateHurufVerseNumber({
       hours,
       minutes,
       seconds,
-      teslaEnergy.teslaScore,
-      teslaEnergy.blessedScore,
-      recommendations,
       gregorianDate,
       hijriDate,
       selectedNumber,
-      selectedNumberInfo,
-      kitabMarqumAnalysis // تمرير تحليل كتاب مرقوم من الآية السابقة
-    );
+      previousMarqumAnalysis: kitabMarqumAnalysis,
+    });
     
     // البحث عن الآية المثالية مع التطابق التام
     findPerfectMatchingVerse(
@@ -1320,12 +1122,13 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
         gregorianDate, 
         hijriDate, 
         currentTime: time,
-        perfectMatch: (hasMatches || hasScore) ? perfectVerse : null
+        perfectMatch: (hasMatches || hasScore) ? perfectVerse : null,
+        hurufMeta,
       });
     }).catch((error) => {
       console.error('Error finding perfect verse:', error);
       // في حالة الخطأ، استخدم الآية الأولية
-      fetchVerseFromAPI(baseVerseNumber, { gregorianDate, hijriDate, currentTime: time });
+      fetchVerseFromAPI(baseVerseNumber, { gregorianDate, hijriDate, currentTime: time, hurufMeta });
     });
     
     setIsLoading(false);
@@ -1849,14 +1652,14 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
         </div>
       )}
 
-      {/* الآية المختارة بناءً على النظام 19 */}
+      {/* الآية المختارة بناءً على نطاق الحروف */}
       {selectedVerse && (
         <div className={`bg-gradient-to-br from-purple-900/40 via-blue-900/40 to-indigo-900/40 backdrop-blur-lg rounded-2xl p-4 sm:p-6 border-2 ${pinnedVerse && pinnedVerse.number === selectedVerse.number ? 'border-yellow-400/70 ring-2 ring-yellow-300/50' : 'border-purple-400/50'} shadow-xl`}>
           <div className="text-center mb-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xl sm:text-2xl font-bold text-purple-300 flex items-center justify-center gap-2 flex-1">
                 <BookOpen className="w-6 h-6 sm:w-8 sm:h-8" />
-                📖 الآية المختارة لك الآن (أكبر عدد تطابقات - النظام 19)
+                📖 الآية المختارة لك الآن (نطاق الحروف — علم الحروف)
                 {pinnedVerse && pinnedVerse.number === selectedVerse.number && (
                   <Pin className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-400 fill-current" />
                 )}
@@ -1977,8 +1780,25 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                     <span className="bg-purple-700/50 px-2 py-1 rounded">⏰ الوقت: {analysis.time.hours}:{String(analysis.time.minutes).padStart(2, '0')}:{String(analysis.time.seconds).padStart(2, '0')}</span>
                     <span className="bg-purple-700/50 px-2 py-1 rounded">⚡ تسلا: {analysis.teslaEnergy.teslaScore}</span>
                     <span className="bg-purple-700/50 px-2 py-1 rounded">✨ بركة: {analysis.teslaEnergy.blessedScore}</span>
-                    <span className="bg-purple-700/50 px-2 py-1 rounded">🔢 النظام: 19</span>
+                    <span className="bg-purple-700/50 px-2 py-1 rounded">🔤 نطاق الحروف</span>
                   </div>
+                  {selectedVerse.hurufMeta && (
+                    <div className="mt-2 space-y-1 text-xs text-indigo-300">
+                      {selectedVerse.hurufMeta.hijriYearIstintaq && (
+                        <p>استنطاق العام الهجري: <span className="font-bold text-indigo-100">{selectedVerse.hurufMeta.hijriYearIstintaq}</span></p>
+                      )}
+                      {selectedVerse.hurufMeta.timeIstintaq && (
+                        <p>استنطاق الوقت: <span className="font-bold text-indigo-100">{selectedVerse.hurufMeta.timeIstintaq}</span></p>
+                      )}
+                      {selectedVerse.hurufMeta.profiles?.hijriYear && (
+                        <p>
+                          جُمَّل العام: {selectedVerse.hurufMeta.profiles.hijriYear.kabir}
+                          {' · '}إسقاط ٩: {selectedVerse.hurufMeta.profiles.hijriYear.isqat9}
+                          {' · '}إسقاط ٢٨: {selectedVerse.hurufMeta.profiles.hijriYear.isqat28}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {selectedVerse.perfectMatch && selectedVerse.perfectMatch.matches && (
                     <div className="mt-2 pt-2 border-t border-indigo-500/30">
                       <p className="text-yellow-300 font-bold text-sm">
