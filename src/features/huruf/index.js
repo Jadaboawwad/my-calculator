@@ -10,4 +10,5 @@ export { qalb, qalbPermutations, mazj, taksir, bast } from './lib/operations';
 export { decodeChronogram, composeChronogram, hijriToGregorian, gregorianToHijri } from './lib/chronogram';
 export { mizan } from './lib/mizan';
 export { dawrOf, nextAlignment } from './lib/dawr';
+export { verseOfTheDay } from './lib/verseOfDay';
 export { HURUF_LETTERS } from './data/letters';

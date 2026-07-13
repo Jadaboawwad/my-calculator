@@ -6,6 +6,7 @@ import { PLANET_LABELS } from '../data/schemes';
 import { useHurufSettings } from './SettingsContext';
 import NitaqWheel from './NitaqWheel';
 import AboutPanel from './AboutPanel';
+import SelectedVersePanel from './SelectedVersePanel';
 
 function NumberChip({ label, value, onOpen }) {
   return (
@@ -42,6 +43,8 @@ export default function HurufDashboard() {
 
   return (
     <div dir="rtl" className="space-y-5">
+      <SelectedVersePanel />
+
       <div>
         <label htmlFor="huruf-input" className="mb-1 block text-sm font-medium text-[#2B2118]">
           اكتب اسمًا أو آيةً أو شطرًا…
