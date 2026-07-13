@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Clock, Star, TrendingUp, Lightbulb, AlertCircle, BookOpen, Sparkles, Zap, Pin, PinOff, ChevronDown, ChevronUp, ExternalLink, Calculator } from 'lucide-react';
 import { getNumberInfo, getNearestNumberInfo, calculateNumberEnergy } from './../../Quranicnumbersdatabase';
 import { analyzeVerseKitabMarqum, getSurahMuqattaatInfo, jumalStandard, sequentialOrder, reduceToSingleDigit } from './../../KitabMarqumSystem';
-import { calculateHurufVerseNumber, isqat } from '../features/huruf';
+import { predictVerseWithReduction, isqat, NATURE_LABELS } from '../features/huruf';
 
 const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -743,14 +743,14 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
           translation: translationData?.text || null,
           gregorianDate: meta.gregorianDate || null,
           hijriDate: meta.hijriDate || null,
-          perfectMatch: meta.perfectMatch || null,
           hurufMeta: meta.hurufMeta || null,
+          reduction: meta.reduction || null,
+          sourceTrace: meta.sourceTrace || null,
         };
         
         setSelectedVerse(verse);
         
-        // استخدام تحليل كتاب مرقوم من الآية المثالية إذا كان متوفراً، وإلا احسبه
-        let marqumAnalysis = meta.perfectMatch?.marqumAnalysis || null;
+        let marqumAnalysis = null;
         
         if (!marqumAnalysis && verseData.text && verseData.surah?.number && verseData.numberInSurah) {
           try {
@@ -785,27 +785,11 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
               selectedNumber
             );
             
-            // دمج التطابقات من الآية المثالية مع التطابقات المكتشفة
-            let allMatches = matches || [];
-            if (meta.perfectMatch && meta.perfectMatch.matches && meta.perfectMatch.matches.length > 0) {
-              // إضافة التطابقات من الآية المثالية
-              meta.perfectMatch.matches.forEach(match => {
-                if (typeof match === 'string') {
-                  allMatches.push({
-                    type: 'perfect_match',
-                    message: match,
-                    value: 0,
-                    matchType: 'perfect'
-                  });
-                }
-              });
-            }
-            
-            if (allMatches.length > 0) {
+            if (matches && matches.length > 0) {
               setNumericMatchAlert({
-                matches: allMatches,
+                matches,
                 timestamp: new Date(),
-                perfectMatch: meta.perfectMatch || null
+                reduction: meta.reduction || null,
               });
               // إخفاء الإشعار بعد 15 ثانية للتطابق التام
               setTimeout(() => {
@@ -1082,54 +1066,24 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
       priority: priority
     });
     
-    // حساب رقم الآية الأولي وفق نطاق الحروف (استنطاق + جُمَّل + إسقاطات)
-    const { verseNumber: baseVerseNumber, hurufMeta } = calculateHurufVerseNumber({
-      hours,
-      minutes,
-      seconds,
-      gregorianDate,
-      hijriDate,
+    // الآية المتنبأ بها عبر محرك الاختزال الموحّد (استنطاق + جُمَّل + إسقاط → reduce)
+    predictVerseWithReduction(time, {
       selectedNumber,
       previousMarqumAnalysis: kitabMarqumAnalysis,
-    });
-    
-    // البحث عن الآية المثالية مع التطابق التام
-    findPerfectMatchingVerse(
-      baseVerseNumber,
-      hours,
-      minutes,
-      seconds,
-      teslaEnergy.teslaScore,
-      teslaEnergy.blessedScore,
-      recommendations,
-      gregorianDate,
-      hijriDate,
-      selectedNumber,
-      selectedNumberInfo
-    ).then((perfectVerse) => {
-      // استخدام الآية المثالية إذا كان لها تطابقات (عدد تطابقات > 0)
-      // الأولوية للآية التي لديها أكبر عدد تطابقات
-      const hasMatches = perfectVerse.matches && perfectVerse.matches.length > 0;
-      const hasScore = perfectVerse.score > 0;
-      
-      // نستخدم الآية المثالية إذا كان لديها تطابقات أو نقاط
-      // لكن نفضل الآية التي لديها تطابقات حتى لو كانت النقاط قليلة
-      const finalVerseNumber = (hasMatches || hasScore) ? perfectVerse.number : baseVerseNumber;
-      
-      // جلب الآية من API
-      // نمرر معلومات التطابق إذا كان هناك تطابقات أو نقاط
-      fetchVerseFromAPI(finalVerseNumber, { 
-        gregorianDate, 
-        hijriDate, 
-        currentTime: time,
-        perfectMatch: (hasMatches || hasScore) ? perfectVerse : null,
-        hurufMeta,
+    })
+      .then((predicted) => {
+        fetchVerseFromAPI(predicted.verseNumber, {
+          gregorianDate,
+          hijriDate,
+          currentTime: time,
+          hurufMeta: predicted.hurufMeta,
+          reduction: predicted.reduction,
+          sourceTrace: predicted.sourceTrace,
+        });
+      })
+      .catch((error) => {
+        console.error('Error predicting verse via reduction engine:', error);
       });
-    }).catch((error) => {
-      console.error('Error finding perfect verse:', error);
-      // في حالة الخطأ، استخدم الآية الأولية
-      fetchVerseFromAPI(baseVerseNumber, { gregorianDate, hijriDate, currentTime: time, hurufMeta });
-    });
     
     setIsLoading(false);
   }, [analysis, selectedNumber, selectedNumberInfo]);
@@ -1530,9 +1484,9 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-bold text-base sm:text-lg">🎯 تطابق رقمي مذهل!</h4>
-                  {numericMatchAlert.perfectMatch && (
+                  {numericMatchAlert.reduction && (
                     <span className="text-xs sm:text-sm bg-yellow-400/30 px-2 py-1 rounded-full">
-                      نقاط: {numericMatchAlert.perfectMatch.score}
+                      اختزال: {numericMatchAlert.reduction.canonicalNumber}
                     </span>
                   )}
                 </div>
@@ -1559,10 +1513,12 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                     </div>
                   ))}
                 </div>
-                {numericMatchAlert.perfectMatch && numericMatchAlert.perfectMatch.matches && numericMatchAlert.perfectMatch.matches.length > 0 && (
+                {numericMatchAlert.reduction && (
                   <div className="mt-3 p-2 bg-yellow-500/30 rounded-lg border border-yellow-300/50">
                     <div className="text-xs text-center text-yellow-100">
-                      ✨ تطابق تام: {numericMatchAlert.perfectMatch.matches.length} تطابق إضافي من الآية المثالية
+                      🔤 اختزال الآية: الرقم المرجعي {numericMatchAlert.reduction.canonicalNumber}
+                      {' · '}
+                      البرج {numericMatchAlert.reduction.lattice.burj?.name || '—'}
                     </div>
                   </div>
                 )}
@@ -1689,17 +1645,30 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
             <p className="text-sm sm:text-base text-purple-200 mt-2">
               الآية رقم {selectedVerse.number} من أصل 6236 آية
             </p>
-            {selectedVerse.perfectMatch && selectedVerse.perfectMatch.matches && selectedVerse.perfectMatch.matches.length > 0 && (
+            {selectedVerse.reduction && (
               <div className="mt-3 p-3 bg-gradient-to-r from-green-900/40 to-emerald-900/40 rounded-lg border border-green-400/50">
                 <p className="text-sm sm:text-base text-green-200 text-center font-bold mb-1">
-                  🎯 تم اختيار هذه الآية لأنها تحتوي على أكبر عدد تطابقات
+                  🔤 تم اختيار هذه الآية عبر محرك الاختزال الموحّد
                 </p>
                 <p className="text-xs sm:text-sm text-green-300 text-center">
-                  عدد التطابقات: <span className="font-bold text-green-100 text-base">{selectedVerse.perfectMatch.matches.length}</span> تطابق | 
-                  النقاط: <span className="font-bold text-green-100 text-base">{selectedVerse.perfectMatch.score}</span>
+                  الرقم المرجعي:{' '}
+                  <span className="font-bold text-green-100 text-base">
+                    {selectedVerse.reduction.canonicalNumber}
+                    {selectedVerse.reduction.canonicalNumber === 10 ? ' (الياء)' : ''}
+                  </span>
+                  {' · '}
+                  جُمَّل النص:{' '}
+                  <span className="font-bold text-green-100">{selectedVerse.reduction.rawTotal}</span>
                 </p>
                 <p className="text-xs text-green-400 text-center mt-1">
-                  تم البحث في نطاق ±150 آية من الآية الأولية
+                  المرتبة {selectedVerse.reduction.lattice.rank}
+                  {' · '}
+                  الطبيعة{' '}
+                  {selectedVerse.reduction.lattice.nature
+                    ? NATURE_LABELS[selectedVerse.reduction.lattice.nature]?.ar
+                    : '—'}
+                  {' · '}
+                  البرج {selectedVerse.reduction.lattice.burj?.name || '—'}
                 </p>
               </div>
             )}
@@ -1778,9 +1747,8 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                   <p className="mb-1">💡 تم اختيار هذه الآية بناءً على:</p>
                   <div className="flex flex-wrap justify-center gap-2 mt-2">
                     <span className="bg-purple-700/50 px-2 py-1 rounded">⏰ الوقت: {analysis.time.hours}:{String(analysis.time.minutes).padStart(2, '0')}:{String(analysis.time.seconds).padStart(2, '0')}</span>
-                    <span className="bg-purple-700/50 px-2 py-1 rounded">⚡ تسلا: {analysis.teslaEnergy.teslaScore}</span>
-                    <span className="bg-purple-700/50 px-2 py-1 rounded">✨ بركة: {analysis.teslaEnergy.blessedScore}</span>
-                    <span className="bg-purple-700/50 px-2 py-1 rounded">🔤 نطاق الحروف</span>
+                    <span className="bg-purple-700/50 px-2 py-1 rounded">🔤 محرك الاختزال</span>
+                    <span className="bg-purple-700/50 px-2 py-1 rounded">📜 مقياس النص</span>
                   </div>
                   {selectedVerse.hurufMeta && (
                     <div className="mt-2 space-y-1 text-xs text-indigo-300">
@@ -1799,40 +1767,21 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                       )}
                     </div>
                   )}
-                  {selectedVerse.perfectMatch && selectedVerse.perfectMatch.matches && (
+                  {selectedVerse.reduction && (
                     <div className="mt-2 pt-2 border-t border-indigo-500/30">
                       <p className="text-yellow-300 font-bold text-sm">
-                        🎯 معيار الاختيار: <span className="text-yellow-200">أكبر عدد تطابقات ({selectedVerse.perfectMatch.matches.length} تطابق)</span>
+                        🎯 معيار الاختيار:{' '}
+                        <span className="text-yellow-200">محرك الاختزال — reduce(scale: text)</span>
                       </p>
-                      <p className="text-xs text-indigo-300 mt-1">تم البحث في ±150 آية واختيار الآية التي لديها أكبر عدد تطابقات رقمية</p>
-                    </div>
-                  )}
-                  {selectedVerse.perfectMatch && selectedVerse.perfectMatch.score >= 20 && (
-                    <div className="mt-3 p-4 bg-gradient-to-r from-yellow-900/60 to-orange-900/60 rounded-lg border-2 border-yellow-400/70 shadow-lg">
-                      <div className="flex items-center justify-center gap-2 mb-3">
-                        <Star className="w-6 h-6 text-yellow-300 fill-current animate-pulse" />
-                        <span className="text-yellow-200 font-bold text-base sm:text-lg">🎯 تطابق تام مكتشف!</span>
-                      </div>
-                      <div className="text-yellow-100 text-sm sm:text-base mb-3 text-center">
-                        <span className="font-bold text-lg">نقاط التطابق: {selectedVerse.perfectMatch.score}</span>
-                        <span className="block text-xs text-yellow-200 mt-1">
-                          ({selectedVerse.perfectMatch.matches?.length || 0} تطابق مكتشف)
-                        </span>
-                      </div>
-                      {selectedVerse.perfectMatch.matches && selectedVerse.perfectMatch.matches.length > 0 && (
-                        <div className="space-y-2 max-h-96 overflow-y-auto bg-yellow-950/30 rounded-lg p-2 border border-yellow-600/30">
-                          <div className="text-xs text-yellow-300 mb-2 text-center font-bold sticky top-0 bg-yellow-900/60 py-1 rounded">
-                            جميع التطابقات المكتشفة ({selectedVerse.perfectMatch.matches.length})
-                          </div>
-                          {selectedVerse.perfectMatch.matches.map((match, idx) => (
-                            <div key={idx} className="bg-yellow-900/50 px-3 py-2 rounded-lg border border-yellow-700/50 hover:bg-yellow-800/60 transition-colors">
-                              <div className="flex items-start gap-2">
-                                <span className="text-yellow-400 font-bold text-xs min-w-[30px]">{idx + 1}.</span>
-                                <span className="text-yellow-100 text-xs sm:text-sm flex-1 text-right">
-                                  {typeof match === 'string' ? match : match.message}
-                                </span>
-                              </div>
-                            </div>
+                      <p className="text-xs text-indigo-300 mt-1 text-center">
+                        {selectedVerse.reduction.reading}
+                      </p>
+                      {selectedVerse.reduction.trace?.steps && (
+                        <div className="mt-2 flex flex-wrap justify-center gap-1">
+                          {selectedVerse.reduction.trace.steps.map((step, idx) => (
+                            <span key={idx} className="bg-indigo-800/50 px-2 py-0.5 rounded text-[10px]">
+                              {step.label}: {step.value}
+                            </span>
                           ))}
                         </div>
                       )}
@@ -2024,36 +1973,20 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                         </div>
                         
                         {/* معلومات إضافية */}
-                        {numericMatchAlert.perfectMatch && numericMatchAlert.perfectMatch.score >= 20 && (
+                        {numericMatchAlert.reduction && (
                           <div className="mt-3 p-4 bg-yellow-900/50 rounded-lg border-2 border-yellow-400/60">
                             <div className="text-sm sm:text-base text-yellow-200 text-center mb-3">
-                              <p className="font-bold text-lg mb-1 flex items-center justify-center gap-2">
-                                <Star className="w-5 h-5 text-yellow-300 fill-current animate-pulse" />
-                                ✨ تطابق تام مكتشف!
+                              <p className="font-bold text-lg mb-1">🔤 اختزال محرك الحروف</p>
+                              <p className="text-base">
+                                الرقم المرجعي:{' '}
+                                <span className="font-bold text-yellow-100 text-lg">
+                                  {numericMatchAlert.reduction.canonicalNumber}
+                                </span>
                               </p>
-                              <p className="text-base">نقاط التطابق: <span className="font-bold text-yellow-100 text-lg">{numericMatchAlert.perfectMatch.score}</span></p>
                               <p className="text-xs text-yellow-300 mt-1">
-                                ({numericMatchAlert.perfectMatch.matches?.length || 0} تطابق مكتشف)
+                                {numericMatchAlert.reduction.reading}
                               </p>
-                              <p className="mt-2 text-xs text-yellow-300">تم البحث في نطاق ±150 آية للعثور على هذه الآية المثالية</p>
                             </div>
-                            {numericMatchAlert.perfectMatch.matches && numericMatchAlert.perfectMatch.matches.length > 0 && (
-                              <div className="space-y-2 max-h-64 overflow-y-auto bg-yellow-950/30 rounded-lg p-2 border border-yellow-600/30 mt-3">
-                                <div className="text-xs text-yellow-300 mb-2 text-center font-bold sticky top-0 bg-yellow-900/60 py-1 rounded">
-                                  جميع التطابقات ({numericMatchAlert.perfectMatch.matches.length})
-                                </div>
-                                {numericMatchAlert.perfectMatch.matches.map((match, idx) => (
-                                  <div key={idx} className="bg-yellow-900/50 px-3 py-2 rounded-lg border border-yellow-700/50">
-                                    <div className="flex items-start gap-2">
-                                      <span className="text-yellow-400 font-bold text-xs min-w-[25px]">{idx + 1}.</span>
-                                      <span className="text-yellow-100 text-xs sm:text-sm flex-1 text-right">
-                                        {typeof match === 'string' ? match : match.message}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
                           </div>
                         )}
                       </div>
