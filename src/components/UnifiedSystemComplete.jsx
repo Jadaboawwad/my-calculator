@@ -2,6 +2,15 @@ import React, { useState, useEffect } from "react";
 import { Clock, Zap, BookOpen, Calculator, TrendingUp, Moon, Sun, Star, Sparkles, ChevronDown } from "lucide-react";
 import WhatToDoNow from "./Whattodonow";
 import { quranicNumbersDatabase, getNumberInfo, calculateNumberEnergy } from "../../Quranicnumbersdatabase";
+import {
+  isqat,
+  dawrOf,
+  computeProfile,
+  versesForNumber,
+  nearestAvailableNumber,
+  NATURE_LABELS,
+  PLANET_LABELS,
+} from "../features/huruf";
 
 const UnifiedSystemComplete = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -9,7 +18,6 @@ const UnifiedSystemComplete = () => {
   const [nextPowerTimes, setNextPowerTimes] = useState([]);
   const [cycles, setCycles] = useState({});
   const [quranMiracles, setQuranMiracles] = useState({});
-  const [tesla369Times, setTesla369Times] = useState([]);
   const [quranNumbers, setQuranNumbers] = useState({});
   const [prayerTimes, setPrayerTimes] = useState(null); // Changed from {} to null
   const [selectedNumber, setSelectedNumber] = useState(null); // Selected number from dropdown
@@ -22,18 +30,11 @@ const UnifiedSystemComplete = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const reduceToSingle = (num) => {
-    while (num > 9) {
-      num = num
-        .toString()
-        .split("")
-        .reduce((a, b) => parseInt(a) + parseInt(b), 0);
-    }
-    return num;
-  };
+  // اختزال إلى خانة واحدة — يستخدم قاعدة الإسقاط في نطاق الحروف (خذه صحيحًا مكمَّلا: صفر يعود ٩)
+  const reduceToSingle = (num) => isqat(num, 9);
 
   // 🕌 جلب مواعيد الصلاة الحية من API حسب الموقع الجغرافي
-  // افتراض أن الدوال المساعدة (reduceToSingle، calculateFullPower، findBestIqamaWith7) مُعرفة مسبقًا
+  // افتراض أن الدوال المساعدة (reduceToSingle، calculateFullPower، findBestIqamaWithHuruf) مُعرفة مسبقًا
   // (تم إبقاؤها كما هي في منطق حساب الأرقام في الكود الأصلي).
 
   const calculatePrayerTimes = async (selectedNumber = null, selectedNumberInfo = null) => {
@@ -129,8 +130,11 @@ const UnifiedSystemComplete = () => {
         // حساب الطاقة
         const power = calculateFullPower(h, m).power;
 
-        // أفضل أوقات الإقامة حيث يظهر رقم 7 أو الرقم المختار
-        const iqamaTimes = findBestIqamaWith7(h, m, selectedNumber, selectedNumberInfo);
+        // جُمَّل/طبيعة/كوكب/برج اسم الصلاة نفسه (نطاق الحروف)
+        const hurufProfile = computeProfile(prayer.name);
+
+        // أفضل أوقات الإقامة حسب مطابقة نطاق حروف اسم الصلاة أو الرقم المختار
+        const iqamaTimes = findBestIqamaWithHuruf(h, m, hurufProfile, selectedNumber, selectedNumberInfo);
 
         prayer.numbers = {
           hour: h,
@@ -142,6 +146,7 @@ const UnifiedSystemComplete = () => {
           power,
         };
 
+        prayer.huruf = hurufProfile;
         prayer.iqama = iqamaTimes;
       });
 
@@ -201,7 +206,8 @@ const UnifiedSystemComplete = () => {
         const total = h + m;
         const totalReduced = reduceToSingle(total);
         const power = calculateFullPower(h, m).power;
-        const iqamaTimes = findBestIqamaWith7(h, m, selectedNumber, selectedNumberInfo);
+        const hurufProfile = computeProfile(prayer.name);
+        const iqamaTimes = findBestIqamaWithHuruf(h, m, hurufProfile, selectedNumber, selectedNumberInfo);
 
         prayer.numbers = {
           hour: h,
@@ -213,6 +219,7 @@ const UnifiedSystemComplete = () => {
           power,
         };
 
+        prayer.huruf = hurufProfile;
         prayer.iqama = iqamaTimes;
       });
 
@@ -231,7 +238,8 @@ const UnifiedSystemComplete = () => {
   };
 
   // 🎯 إيجاد أفضل أوقات الإقامة حيث يظهر رقم 7 أو الرقم المختار
-  const findBestIqamaWith7 = (prayerHour, prayerMinute, selectedNumber = null, selectedNumberInfo = null) => {
+  // 🎯 إيجاد أفضل أوقات الإقامة حسب مطابقة جُمَّل/كوكب/برج اسم الصلاة نفسه (نطاق الحروف)
+  const findBestIqamaWithHuruf = (prayerHour, prayerMinute, prayerProfile, selectedNumber = null, selectedNumberInfo = null) => {
     const suggestions = [];
 
     // نبحث في الدقائق من 5 إلى 30 دقيقة بعد الأذان
@@ -256,20 +264,34 @@ const UnifiedSystemComplete = () => {
       const mReduced = reduceToSingle(m);
       const totalReduced = reduceToSingle(total);
 
-      // نبحث عن ظهور رقم 7
-      const has7InNumbers = [h, m, total].includes(7);
-      const has7InReduced = [hReduced, mReduced, totalReduced].includes(7);
-      const has7InDigits = h.toString().includes("7") || m.toString().includes("7");
+      // مطابقة مرشّح الإقامة بجُمَّل/كوكب/برج اسم الصلاة نفسه
+      let hurufScore = 0;
+      let hurufReasons = [];
+
+      if (prayerProfile) {
+        if ([hReduced, mReduced, totalReduced].includes(prayerProfile.isqat9)) {
+          hurufScore += 5;
+          hurufReasons.push(`🔤 يطابق إسقاط جُمَّل «${prayerProfile.kabir}» (٩=${prayerProfile.isqat9})`);
+        }
+        if (isqat(total, 7) === prayerProfile.isqat7) {
+          hurufScore += 3;
+          hurufReasons.push(`🪐 يطابق كوكب اسم الصلاة (${PLANET_LABELS[prayerProfile.dominantPlanet] || ""})`);
+        }
+        if (isqat(total, 12) === prayerProfile.isqat12) {
+          hurufScore += 3;
+          hurufReasons.push(`♈ يطابق برج اسم الصلاة (${prayerProfile.burj?.name || ""})`);
+        }
+      }
 
       // نبحث عن ظهور الرقم المختار (إذا كان موجوداً)
       let hasSelectedNumber = false;
       let selectedNumberScore = 0;
       let selectedNumberReasons = [];
-      
+
       if (selectedNumber && selectedNumberInfo) {
         const numValue = Number(selectedNumber) || 0;
         const numReduced = numValue > 9 ? reduceToSingle(numValue) : numValue;
-        
+
         // البحث عن الرقم في الأرقام الكاملة
         if ([h, m, total].includes(numValue)) {
           hasSelectedNumber = true;
@@ -278,7 +300,7 @@ const UnifiedSystemComplete = () => {
           if (m === numValue) selectedNumberReasons.push(`الدقيقة ${numValue} (رقم مختار)`);
           if (total === numValue) selectedNumberReasons.push(`المجموع ${numValue} (رقم مختار)`);
         }
-        
+
         // البحث عن الرقم في الأرقام المختزلة
         if ([hReduced, mReduced, totalReduced].includes(numReduced) || [hReduced, mReduced, totalReduced].includes(numValue)) {
           hasSelectedNumber = true;
@@ -287,7 +309,7 @@ const UnifiedSystemComplete = () => {
           if (mReduced === numReduced || mReduced === numValue) selectedNumberReasons.push(`اختزال الدقيقة ${numReduced} (رقم مختار)`);
           if (totalReduced === numReduced || totalReduced === numValue) selectedNumberReasons.push(`اختزال المجموع ${numReduced} (رقم مختار)`);
         }
-        
+
         // البحث عن الرقم في الأرقام الفردية
         const hStr = h.toString();
         const mStr = m.toString();
@@ -296,44 +318,18 @@ const UnifiedSystemComplete = () => {
           selectedNumberScore += 4;
           selectedNumberReasons.push(`يحتوي على الرقم المختار ${selectedNumber}`);
         }
-        
-        // إذا كان الرقم المختار من أرقام تسلا (3، 6، 9) أو 7، أضف نقاط إضافية
-        if ([3, 6, 9].includes(numReduced) || [3, 6, 9].includes(numValue)) {
-          selectedNumberScore += 2;
-          selectedNumberReasons.push(`⚡ رقم تسلا مختار`);
-        }
-        
+
         if (numValue === 7 || numReduced === 7) {
           selectedNumberScore += 3;
           selectedNumberReasons.push(`✨ رقم مبارك مختار`);
         }
       }
 
-      let score = 0;
-      let reasons = [];
-
-      if (has7InNumbers) {
-        score += 5;
-        if (h === 7) reasons.push("الساعة 7");
-        if (m === 7) reasons.push("الدقيقة 7");
-        if (total === 7) reasons.push("المجموع 7");
-      }
-
-      if (has7InReduced) {
-        score += 3;
-        if (hReduced === 7) reasons.push("اختزال الساعة 7");
-        if (mReduced === 7) reasons.push("اختزال الدقيقة 7");
-        if (totalReduced === 7) reasons.push("اختزال المجموع 7");
-      }
-
-      if (has7InDigits) {
-        score += 2;
-        reasons.push("يحتوي على رقم 7");
-      }
+      let score = hurufScore;
+      let reasons = [...selectedNumberReasons, ...hurufReasons];
 
       // إضافة نقاط الرقم المختار
       score += selectedNumberScore;
-      reasons = [...selectedNumberReasons, ...reasons];
 
       // نقاط إضافية للأوقات المثالية (10، 15، 20 دقيقة)
       if ([10, 15, 20].includes(addMinutes)) {
@@ -342,8 +338,9 @@ const UnifiedSystemComplete = () => {
 
       // حساب طاقة الوقت
       const power = calculateFullPower(h, m).power;
+      const hasHurufMatch = hurufScore > 0;
 
-      // إضافة الأوقات التي تحتوي على الرقم المختار أو رقم 7 أو طاقة عالية
+      // إضافة الأوقات التي تحتوي على مطابقة نطاق حروف أو الرقم المختار أو طاقة عالية
       if (score > 0 || power >= 6 || hasSelectedNumber) {
         suggestions.push({
           hour: h,
@@ -355,7 +352,7 @@ const UnifiedSystemComplete = () => {
           score,
           power,
           reasons: reasons.join(" + "),
-          has7: has7InNumbers || has7InReduced || has7InDigits,
+          hasHurufMatch,
           hasSelectedNumber: hasSelectedNumber,
           selectedNumber: selectedNumber
         });
@@ -367,10 +364,14 @@ const UnifiedSystemComplete = () => {
       // أولوية للرقم المختار
       if (a.hasSelectedNumber && !b.hasSelectedNumber) return -1;
       if (!a.hasSelectedNumber && b.hasSelectedNumber) return 1;
-      
+
+      // ثم لمطابقة نطاق الحروف
+      if (a.hasHurufMatch && !b.hasHurufMatch) return -1;
+      if (!a.hasHurufMatch && b.hasHurufMatch) return 1;
+
       // ثم حسب النقاط
       if (b.score !== a.score) return b.score - a.score;
-      
+
       // ثم حسب الطاقة
       return b.power - a.power;
     });
@@ -387,7 +388,21 @@ const UnifiedSystemComplete = () => {
 
     const meanings = [];
 
-    // إضافة معاني الأرقام
+    // آيات مرتبطة بجُمَّل اسم الصلاة نفسه (نطاق الحروف) — تأتي أولًا
+    if (prayer.huruf) {
+      const nearest = nearestAvailableNumber(prayer.huruf.isqat9);
+      versesForNumber(nearest)
+        .slice(0, 2)
+        .forEach((v) => {
+          meanings.push({
+            num: prayer.huruf.isqat9,
+            meaning: `${v.text} (${v.surah}:${v.ayah})`,
+            icon: "🔤",
+          });
+        });
+    }
+
+    // إضافة معاني الأرقام (وقت الصلاة نفسه)
     [hReduced, mReduced, totalReduced].forEach((num) => {
       if (versesDB[num]) {
         meanings.push({
@@ -404,73 +419,6 @@ const UnifiedSystemComplete = () => {
       isSpecial: power >= 6,
       message: power >= 10 ? "⭐ وقت قوي جداً للصلاة!" : power >= 6 ? "✨ وقت مبارك" : "🕌 وقت الصلاة",
     };
-  };
-
-  const isTesla369Perfect = (hour, minute) => {
-    const h = hour;
-    const m = minute;
-    const total = h + m;
-
-    const hReduced = reduceToSingle(h);
-    const mReduced = reduceToSingle(m);
-    const totalReduced = reduceToSingle(total);
-
-    const has3 = [hReduced, mReduced, totalReduced].includes(3);
-    const has6 = [hReduced, mReduced, totalReduced].includes(6);
-    const has9 = [hReduced, mReduced, totalReduced].includes(9);
-
-    return has3 && has6 && has9;
-  };
-
-  const findNext369Times = () => {
-    const now = currentTime;
-    let hour = now.getHours();
-    let minute = now.getMinutes();
-
-    const perfectTimes = [];
-
-    for (let h = 0; h < 48; h++) {
-      for (let m = 0; m < 60; m++) {
-        const testHour = h % 24;
-
-        if (h === hour && testHour === hour && m <= minute) continue;
-
-        if (isTesla369Perfect(testHour, m)) {
-          const currentDate = new Date(now);
-          const targetDate = new Date(currentDate);
-
-          if (h >= 24) {
-            targetDate.setDate(targetDate.getDate() + 1);
-          } else if (testHour < hour || (testHour === hour && m <= minute)) {
-            targetDate.setDate(targetDate.getDate() + 1);
-          }
-
-          targetDate.setHours(testHour, m, 0, 0);
-
-          const diff = targetDate - currentDate;
-          const hoursUntil = Math.floor(diff / (1000 * 60 * 60));
-          const minutesUntil = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-          const power = calculateFullPower(testHour, m);
-
-          perfectTimes.push({
-            hour: testHour,
-            minute: m,
-            hoursUntil,
-            minutesUntil,
-            totalMinutes: hoursUntil * 60 + minutesUntil,
-            power: power.power,
-            hReduced: power.hReduced,
-            mReduced: power.mReduced,
-            totalReduced: power.totalReduced,
-          });
-        }
-      }
-    }
-
-    perfectTimes.sort((a, b) => a.totalMinutes - b.totalMinutes);
-
-    return perfectTimes.slice(0, 10);
   };
 
   // قاعدة بيانات شاملة للآيات القرآنية بالأرقام ومعانيها العميقة
@@ -625,12 +573,12 @@ const UnifiedSystemComplete = () => {
         type: "توازن وتدبر",
         actions: ["⚖️ إعادة التوازن بين الأعمال", "🤲 التوكل على الله", "📖 قراءة قرآن بتدبر", "📝 مراجعة الأولويات", "💼 عمل متوازن بين دنيا وآخرة"],
       },
-      // رقم 3 - الصبر (Tesla)
+      // رقم 3 - الصبر
       3: {
         type: "صبر وثبات",
         actions: ["💪 الصبر على الابتلاء", "⛰️ الثبات على الحق", "🤲 دعاء الفرج والتيسير", "💼 عمل مهم يحتاج صبر", "📖 قراءة آيات الصبر"],
       },
-      // رقم 6 - التأني (Tesla)
+      // رقم 6 - التأني
       6: {
         type: "حكمة وتأني",
         actions: ["⏳ التأني في اتخاذ القرارات", "🤲 الدعاء بالتوفيق والسداد", "💭 التفكر في حكمة التوقيت", "📝 تأجيل القرارات المستعجلة", "🎯 التخطيط طويل المدى"],
@@ -640,7 +588,7 @@ const UnifiedSystemComplete = () => {
         type: "وقت مبارك",
         actions: ["🌟 دعاء مهم - وقت مبارك!", "📖 قراءة قرآن بخشوع", "🕌 صلاة نافلة مباركة", "💼 عمل مثمر ومبارك", "🌙 ذكر الله والاستغفار"],
       },
-      // رقم 9 - الحذر (Tesla)
+      // رقم 9 - الحذر
       9: {
         type: "حذر وتوبة",
         actions: ["⚠️ الابتعاد عن المعاصي", "🤲 الاستعاذة بالله من الشر", "📝 مراجعة الأعمال والنوايا", "💚 التوبة والاستغفار", "✨ عمل صالح يمحو السيئات"],
@@ -693,7 +641,6 @@ const UnifiedSystemComplete = () => {
 
     // التحقق من وجود أرقام خاصة
     const has7 = numbers.includes(7) || String(h).includes("7") || String(m).includes("7");
-    const hasTesla = numbers.some((n) => [3, 6, 9].includes(n));
     const has11 = h === m; // مثل 11:11, 14:14
 
     // اختيار أفضل مجموعة توصيات
@@ -758,7 +705,6 @@ const UnifiedSystemComplete = () => {
       actionType: selectedRec.type,
       recommendations: selectedRec.actions,
       hasBlessedNumber: has7,
-      hasTesla: hasTesla,
       has11: has11,
     };
   };
@@ -780,17 +726,11 @@ const UnifiedSystemComplete = () => {
       reasons.push("☝️ الواحد الأحد");
     }
 
-    if ([3, 6, 9].includes(hReduced)) {
-      power += hReduced === 9 ? 3 : hReduced === 3 ? 2 : 1;
-      reasons.push(`⚡ تسلا: ${hReduced}`);
-    }
-    if ([3, 6, 9].includes(mReduced)) {
-      power += mReduced === 9 ? 3 : mReduced === 3 ? 2 : 1;
-      reasons.push(`⚡ تسلا: ${mReduced}`);
-    }
-    if ([3, 6, 9].includes(totalReduced)) {
-      power += totalReduced === 9 ? 3 : totalReduced === 3 ? 2 : 1;
-      reasons.push(`⚡ تسلا: ${totalReduced}`);
+    // حسب نطاق الحروف: الياء (١٠) هي "تمام المراتب" — لحظة إغلاق دولاب المراتب العشر
+    const dawr = dawrOf(total);
+    if (dawr.isRankPivot) {
+      power += 3;
+      reasons.push("🔟 تمام المراتب (الياء)");
     }
 
     if (h === 4 || m === 4 || total === 4 || hReduced === 4 || mReduced === 4 || totalReduced === 4) {
@@ -832,6 +772,7 @@ const UnifiedSystemComplete = () => {
       mReduced,
       totalReduced,
       total,
+      dawr,
       isPerfect: power >= 10,
       isSuper: power >= 15,
       recommendations: recs.recommendations,
@@ -915,7 +856,7 @@ const UnifiedSystemComplete = () => {
       monthlyCycle: reduceToSingle(d),
       yearlyCycle: reduceToSingle(month),
       masterCycle: reduceToSingle(h + m + d + month),
-      tesla369: [3, 6, 9].includes(reduceToSingle(h + m)),
+      hurufPivot: dawrOf(h + m).isRankPivot, // الياء (١٠) — تمام المراتب
       quran: [7, 1, 9, 5].includes(reduceToSingle(h + m)),
     };
   };
@@ -1000,12 +941,6 @@ const UnifiedSystemComplete = () => {
         }
       }
       
-      // Check if selected number is Tesla number
-      if ([3, 6, 9].includes(numReduced) || [3, 6, 9].includes(numValue)) {
-        modifiedAnalysis.power += 2;
-        modifiedAnalysis.reasons.push(`⚡ رقم تسلا: ${selectedNumber}`);
-      }
-      
       // Check if selected number is 7 (blessed)
       if (numValue === 7 || numReduced === 7) {
         modifiedAnalysis.power += 3;
@@ -1021,7 +956,6 @@ const UnifiedSystemComplete = () => {
     setNextPowerTimes(findNextPowerTimes());
     setCycles(calculateCycles());
     setQuranMiracles(calculateQuranMiracles());
-    setTesla369Times(findNext369Times());
     setQuranNumbers(getQuranStats());
 
     // جلب مواقيت الصلاة الحية (مع الأخذ في الاعتبار الرقم المختار)
@@ -1088,7 +1022,7 @@ const UnifiedSystemComplete = () => {
         <div className="text-center mb-6">
           <h1 className="text-3xl md:text-5xl font-bold mb-2 bg-gradient-to-r from-yellow-400 via-purple-400 to-blue-400 bg-clip-text text-transparent">النظام المتين الكامل</h1>
           <p className="text-purple-300 text-sm md:text-base">﴿وَلِتَعْلَمُوا عَدَدَ السِّنِينَ وَالْحِسَابَ﴾</p>
-          <p className="text-blue-300 text-xs md:text-sm mt-1">الإعجاز العددي القرآني × نظرية تسلا 3-6-9</p>
+          <p className="text-blue-300 text-xs md:text-sm mt-1">الإعجاز العددي القرآني × نطاق الحروف (علم الحروف)</p>
         </div>
 
         {/* Number Selection Dropdown */}
@@ -1305,9 +1239,9 @@ const UnifiedSystemComplete = () => {
                   <div className="text-2xl font-bold">{cycles.masterCycle}</div>
                 </div>
 
-                {cycles.tesla369 && (
+                {cycles.hurufPivot && (
                   <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded p-2 border border-purple-400">
-                    <div className="text-sm">⚡ دورة تسلا نشطة</div>
+                    <div className="text-sm">🔟 لحظة تمام المراتب (نطاق الحروف)</div>
                   </div>
                 )}
 
@@ -1497,6 +1431,23 @@ const UnifiedSystemComplete = () => {
                         </div>
                       </div>
 
+                      {/* نطاق الحروف: جُمَّل اسم الصلاة */}
+                      {prayer.huruf && (
+                        <div className="mb-4 p-3 bg-teal-950/50 rounded-lg border border-teal-500/30 text-center">
+                          <div className="text-sm text-teal-200 mb-2 font-bold">🔤 جُمَّل الاسم (نطاق الحروف)</div>
+                          <div className="text-xs text-teal-100">
+                            {prayer.name} = {prayer.huruf.kabir} ← إسقاط ٩: {prayer.huruf.isqat9}
+                          </div>
+                          <div className="text-xs text-teal-300 mt-1">
+                            الطبيعة: {NATURE_LABELS[prayer.huruf.dominantNature]?.ar || "—"}
+                            {" · "}
+                            الكوكب: {PLANET_LABELS[prayer.huruf.dominantPlanet] || "—"}
+                            {" · "}
+                            البرج: {prayer.huruf.burj?.name || "—"}
+                          </div>
+                        </div>
+                      )}
+
                       {/* المعاني القرآنية */}
                       {analysis.meanings && analysis.meanings.length > 0 && (
                         <div className="mb-4 p-3 bg-purple-950/50 rounded-lg border border-purple-500/30">
@@ -1511,7 +1462,7 @@ const UnifiedSystemComplete = () => {
                         </div>
                       )}
 
-                      {/* أفضل أوقات الإقامة مع رقم 7 أو الرقم المختار */}
+                      {/* أفضل أوقات الإقامة حسب مطابقة نطاق حروف اسم الصلاة أو الرقم المختار */}
                       {prayer.iqama && prayer.iqama.length > 0 && (
                         <div className="p-3 bg-gradient-to-r from-yellow-900/40 to-orange-900/40 rounded-lg border border-yellow-400/50">
                           <div className="text-sm font-bold text-yellow-200 mb-3 text-center">
@@ -1522,16 +1473,16 @@ const UnifiedSystemComplete = () => {
                               </span>
                             )}
                             {!selectedNumber && (
-                              <span className="block text-xs text-yellow-300 mt-1">(رقم 7 ظاهر)</span>
+                              <span className="block text-xs text-yellow-300 mt-1">(يطابق نطاق حروف اسم الصلاة)</span>
                             )}
                           </div>
                           <div className="space-y-2 max-h-80 overflow-y-auto">
                             {prayer.iqama.slice(0, 5).map((iqama, idx) => (
                               <div key={idx} className={`p-2 rounded-lg border ${
-                                iqama.hasSelectedNumber 
-                                  ? "bg-gradient-to-r from-purple-900/60 to-pink-900/60 border-purple-400/70 ring-2 ring-purple-300/50" 
-                                  : iqama.has7 
-                                  ? "bg-yellow-900/50 border-yellow-400/60" 
+                                iqama.hasSelectedNumber
+                                  ? "bg-gradient-to-r from-purple-900/60 to-pink-900/60 border-purple-400/70 ring-2 ring-purple-300/50"
+                                  : iqama.hasHurufMatch
+                                  ? "bg-yellow-900/50 border-yellow-400/60"
                                   : "bg-green-900/30 border-green-400/30"
                               }`}>
                                 <div className="flex justify-between items-center mb-1">
@@ -1543,22 +1494,18 @@ const UnifiedSystemComplete = () => {
                                   <span className="text-xs text-yellow-200">بعد {iqama.afterAdhan} دقيقة</span>
                                 </div>
 
-                                {(iqama.has7 || iqama.hasSelectedNumber) && (
+                                {(iqama.hasHurufMatch || iqama.hasSelectedNumber) && (
                                   <div className="text-xs mb-1">
                                     <span className={`font-bold ${
                                       iqama.hasSelectedNumber ? "text-purple-300" : "text-yellow-300"
                                     }`}>
                                       {iqama.hasSelectedNumber && "⭐ "}
-                                      {iqama.has7 && "🎯 "}
                                       {iqama.reasons}
                                     </span>
                                   </div>
                                 )}
 
                                 <div className="text-xs text-green-200">
-                                  {iqama.hReduced === 7 && <span className="mr-1">✨ س→7</span>}
-                                  {iqama.mReduced === 7 && <span className="mr-1">✨ د→7</span>}
-                                  {iqama.totalReduced === 7 && <span className="mr-1">✨ ج→7</span>}
                                   {iqama.hasSelectedNumber && iqama.selectedNumber && (
                                     <span className="mr-1">⭐ رقم مختار: {iqama.selectedNumber}</span>
                                   )}
