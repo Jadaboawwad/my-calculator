@@ -36,6 +36,23 @@ export function numberToLetters(n) {
 }
 
 /**
+ * استنطاق كل مكوّن عددي على حدة ثم دمجه — يتجنّب تكرار مئات حروف الألف
+ * عند تفكيك أعداد مركّبة كبيرة (مثل ١٧٣٠٠٠ كوقت HHMMSS).
+ * @param  {...number} values
+ * @returns {{ parts: string[], text: string, lettersText: string }}
+ */
+export function compoundIstintaq(...values) {
+  const parts = values
+    .filter((v) => Number.isInteger(v) && v > 0)
+    .map((v) => numberToLetters(v).text);
+  return {
+    parts,
+    text: parts.join(' · '),
+    lettersText: parts.join(''),
+  };
+}
+
+/**
  * القيمة العددية لنص عربي — مرادف لحساب الجمل الكبير.
  * @param {string} text
  * @param {import('./normalize').NormalizeOptions} [options]

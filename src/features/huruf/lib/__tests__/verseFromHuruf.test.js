@@ -38,4 +38,15 @@ describe('calculateHurufVerseNumber', () => {
     expect(hurufMeta.hijriYearIstintaq).toBeTruthy();
     expect(hurufMeta.profiles.hijriYear).not.toBeNull();
   });
+
+  it('keeps time istintaq short (per-component, not composite HHMMSS)', () => {
+    const { hurufMeta } = calculateHurufVerseNumber({
+      hours: 17,
+      minutes: 30,
+      seconds: 0,
+    });
+    expect(hurufMeta.timeIstintaq).toBeTruthy();
+    expect(hurufMeta.timeIstintaq.length).toBeLessThan(20);
+    expect(hurufMeta.timeIstintaq).toContain('·');
+  });
 });

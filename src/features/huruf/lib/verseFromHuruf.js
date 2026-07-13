@@ -1,7 +1,7 @@
 // اختيار رقم الآية الكلي (١..٦٢٣٦) وفق منظومة نطاق الحروف — استنطاق + جُمَّل + إسقاطات
 
 import { computeProfile } from './profile';
-import { numberToLetters } from './istintaq';
+import { numberToLetters, compoundIstintaq } from './istintaq';
 import { isqat9, isqat12, isqat28, isqat7, isqat4 } from './isqat';
 
 const TOTAL_VERSES = 6236;
@@ -66,19 +66,14 @@ export function calculateHurufVerseNumber({
 
   // استنطاق العام الهجري (مثل ١٣٩٤ ← غ ش ص د)
   const hijriYearIstintaq = safeIstintaq(hYear);
-  const hijriDateNum = hYear > 0 ? hYear * 10000 + hMonth * 100 + hDay : 0;
-  const hijriDateIstintaq = safeIstintaq(hijriDateNum);
-
-  const gregorianDateNum = gYear > 0 ? gYear * 10000 + gMonth * 100 + gDay : 0;
-  const gregorianDateIstintaq = safeIstintaq(gregorianDateNum);
-
-  const timeComposite = hours * 10000 + minutes * 100 + seconds;
-  const timeIstintaq = safeIstintaq(timeComposite);
+  const hijriDateIstintaq = compoundIstintaq(hYear, hMonth, hDay);
+  const gregorianDateIstintaq = compoundIstintaq(gYear, gMonth, gDay);
+  const timeIstintaq = compoundIstintaq(hours, minutes, seconds);
 
   const hijriYearProfile = safeProfile(hijriYearIstintaq.text);
-  const hijriDateProfile = safeProfile(hijriDateIstintaq.text);
-  const gregorianDateProfile = safeProfile(gregorianDateIstintaq.text);
-  const timeProfile = safeProfile(timeIstintaq.text);
+  const hijriDateProfile = safeProfile(hijriDateIstintaq.lettersText);
+  const gregorianDateProfile = safeProfile(gregorianDateIstintaq.lettersText);
+  const timeProfile = safeProfile(timeIstintaq.lettersText);
 
   let seed = 0;
   seed += profileSeed(hijriYearProfile, 3);

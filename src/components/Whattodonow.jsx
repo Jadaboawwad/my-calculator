@@ -1788,7 +1788,7 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
                         <p>استنطاق العام الهجري: <span className="font-bold text-indigo-100">{selectedVerse.hurufMeta.hijriYearIstintaq}</span></p>
                       )}
                       {selectedVerse.hurufMeta.timeIstintaq && (
-                        <p>استنطاق الوقت: <span className="font-bold text-indigo-100">{selectedVerse.hurufMeta.timeIstintaq}</span></p>
+                        <p className="break-words">استنطاق الوقت: <span className="font-bold text-indigo-100">{selectedVerse.hurufMeta.timeIstintaq}</span></p>
                       )}
                       {selectedVerse.hurufMeta.profiles?.hijriYear && (
                         <p>
