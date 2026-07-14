@@ -39,11 +39,27 @@ export default function SettingsPanel() {
     setPlanetSchemeId,
     valueSchemeId,
     setValueSchemeId,
+    disclosureLevel,
+    setDisclosureLevel,
     resetSettings,
   } = useHurufSettings();
 
   return (
     <div dir="rtl" className="space-y-5">
+      <div className="space-y-2">
+        <div className="text-sm font-semibold">مستوى الإفصاح</div>
+        <Choice
+          label="المستوى"
+          value={disclosureLevel}
+          onChange={setDisclosureLevel}
+          options={[
+            { value: 'beginner', label: 'مبتدئ' },
+            { value: 'advanced', label: 'متعمق' },
+          ]}
+        />
+        <p className="text-xs text-[#6B4F2A]">يغيّر عمق القراءة النصية فقط، لا الأرقام المحسوبة.</p>
+      </div>
+
       <div className="space-y-2">
         <div className="text-sm font-semibold">مخطط القيم (حساب الجمل)</div>
         <Choice

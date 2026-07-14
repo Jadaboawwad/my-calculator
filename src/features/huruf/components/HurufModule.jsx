@@ -1,26 +1,28 @@
 import React, { useState } from 'react';
 import { HurufSettingsProvider } from './SettingsContext';
-import HurufDashboard from './HurufDashboard';
-import OperationsPanel from './OperationsPanel';
-import ChronogramTool from './ChronogramTool';
-import MizanTool from './MizanTool';
+import UnifiedReducer from './UnifiedReducer';
+import QuranNumericPanel from './QuranNumericPanel';
 import LearnMode from './LearnMode';
 import SettingsPanel from './SettingsPanel';
 import AboutPanel from './AboutPanel';
 
 const SECTIONS = [
-  { id: 'dashboard', label: 'لوحة التحليل', Comp: HurufDashboard },
-  { id: 'operations', label: 'العمليات', Comp: OperationsPanel },
-  { id: 'chronogram', label: 'التأريخ الشعري', Comp: ChronogramTool },
-  { id: 'mizan', label: 'الموازنة', Comp: MizanTool },
-  { id: 'learn', label: 'تعلّم المنظومة', Comp: LearnMode },
-  { id: 'settings', label: 'الإعدادات', Comp: SettingsPanel },
-  { id: 'about', label: 'عن هذا العلم', Comp: AboutPanel },
+  { id: 'reducer', label: 'الاختزال' },
+  { id: 'quran', label: 'الآيات الرقمية' },
+  { id: 'learn', label: 'تعلّم المنظومة' },
+  { id: 'settings', label: 'الإعدادات' },
+  { id: 'about', label: 'عن هذا العلم' },
 ];
 
 function HurufModuleInner() {
-  const [section, setSection] = useState('dashboard');
-  const Active = SECTIONS.find((s) => s.id === section)?.Comp || HurufDashboard;
+  const [section, setSection] = useState('reducer');
+  const [focusRuleId, setFocusRuleId] = useState(null);
+
+  // رابط «أي بيت أنتج هذه القاعدة»: من شريحة قاعدة في نتيجة الاختزال إلى درسها (R16/R32)
+  const openRule = (ruleId) => {
+    setFocusRuleId(ruleId);
+    setSection('learn');
+  };
 
   return (
     <div
@@ -29,8 +31,10 @@ function HurufModuleInner() {
       style={{ background: '#F5EEDD', color: '#2B2118', fontFamily: '"IBM Plex Sans Arabic","Segoe UI",sans-serif' }}
     >
       <header className="border-b border-[#D9CBA6] bg-[#2B2118] px-4 py-3 text-[#F5EEDD]">
-        <h1 className="text-lg font-bold">نطاق الحروف — علم الحروف (دراسة تراثية)</h1>
-        <p className="text-xs text-[#D9CBA6]">أداة دراسة وحساب على منظومة أصول علم الحرف — حسب المصادر التراثية فقط</p>
+        <h1 className="text-lg font-bold">موحّد الاختزال — نطاق الحروف (دراسة تراثية)</h1>
+        <p className="text-xs text-[#D9CBA6]">
+          محرك اختزال واحد، ثلاثة مقاييس: كلمة · نص · زمن — حسب المصادر التراثية فقط
+        </p>
       </header>
 
       <nav className="flex flex-wrap gap-1 border-b border-[#D9CBA6] bg-white px-2 py-2">
@@ -48,7 +52,11 @@ function HurufModuleInner() {
       </nav>
 
       <main className="mx-auto max-w-3xl p-4">
-        <Active />
+        {section === 'reducer' && <UnifiedReducer onOpenRule={openRule} />}
+        {section === 'quran' && <QuranNumericPanel />}
+        {section === 'learn' && <LearnMode focusRuleId={focusRuleId} />}
+        {section === 'settings' && <SettingsPanel />}
+        {section === 'about' && <AboutPanel />}
       </main>
     </div>
   );
