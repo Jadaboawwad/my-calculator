@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { reduce, SCALES, CANONICAL_MODULUS, READING_DISCLAIMER } from '../lib/engine';
 import { suggestVerses, MATCH_TYPE_LABELS } from '../lib/verseSuggest';
+import { loadQuranCorpus } from '../lib/quranApi';
+import { buildQuranIndex, matchQuranVerses, QURAN_MATCH_TYPE_LABELS } from '../lib/quranMatch';
 import { SEED_ENTRIES } from '../data/quranNumeric';
 import { loadUserEntries } from '../lib/userVerses';
 import { qalb, taksir, bast } from '../lib/operations';
@@ -15,6 +17,27 @@ import SelectedVersePanel from './SelectedVersePanel';
 import AboutPanel from './AboutPanel';
 
 const AMIRI = { fontFamily: '"Amiri","Scheherazade New",serif' };
+
+const ALL_MATCH_TYPE_LABELS = { ...MATCH_TYPE_LABELS, ...QURAN_MATCH_TYPE_LABELS };
+
+/** جلب نص المصحف كاملًا (مرة واحدة، مع تخزين محلي) — حالة: تحميل/جاهز/خطأ مع إعادة محاولة */
+function useQuranCorpus() {
+  const [state, setState] = useState({ status: 'loading', corpus: null, error: null });
+
+  const load = useCallback(() => {
+    setState({ status: 'loading', corpus: null, error: null });
+    let cancelled = false;
+    loadQuranCorpus()
+      .then((corpus) => !cancelled && setState({ status: 'ready', corpus, error: null }))
+      .catch((e) => !cancelled && setState({ status: 'error', corpus: null, error: e.message }));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(load, [load]);
+  return { ...state, retry: load };
+}
 
 /** الشاشة الواحدة (SPEC §5): مبدّل مقياس فوق محرك واحد — الشكل يتغير، الجوهر لا يتغير */
 export default function UnifiedReducer({ onOpenRule }) {
@@ -59,6 +82,17 @@ export default function UnifiedReducer({ onOpenRule }) {
     if (!result) return [];
     return suggestVerses(result, { entries: [...SEED_ENTRIES, ...loadUserEntries()] });
   }, [result]);
+
+  // فهرسة كامل المصحف بنفس قواعد التطبيع الفعّالة — تُعاد فقط عند تغيّر النص أو الإعدادات
+  const quran = useQuranCorpus();
+  const quranIndex = useMemo(
+    () => (quran.corpus ? buildQuranIndex(quran.corpus, computeOptions) : null),
+    [quran.corpus, computeOptions]
+  );
+  const quranMatches = useMemo(
+    () => (result && quranIndex ? matchQuranVerses(result, quranIndex) : []),
+    [result, quranIndex]
+  );
 
   const activeChars = result ? result.letterTrace.map((t) => t.normalized) : [];
   const showAdvancedPanels = result && depth >= 3 && disclosureLevel === 'advanced' && scale !== 'time';
@@ -369,35 +403,47 @@ export default function UnifiedReducer({ onOpenRule }) {
             </div>
           )}
 
-          {/* آيات ذات صلة عددية — جوهر طلب المستخدم */}
+          {/* آيات ذات صلة عددية — من كامل المصحف (QURAN API) ومن القاعدة المحلية معًا */}
           <div className="rounded-lg border border-[#D9CBA6] bg-white p-3">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-semibold text-[#6B4F2A]">آيات ذات صلة عددية</span>
               <span className="text-[10px] text-[#6B5B45]">مطابقة حسابية وصفية — لا تفسير ولا تكهن</span>
+            </div>
+
+            <div className="mb-1 text-xs font-medium text-[#6B5B45]">
+              من كامل المصحف — أي آية توافق قواعد النظام (جُمَّل/إسقاط/استنطاق)
+            </div>
+            {quran.status === 'loading' && (
+              <p className="text-sm text-[#6B5B45]">جارٍ تحميل نص المصحف من QURAN API…</p>
+            )}
+            {quran.status === 'error' && (
+              <p className="text-sm text-[#B5432A]">
+                تعذر تحميل نص المصحف: {quran.error}{' '}
+                <button type="button" onClick={quran.retry} className="underline">
+                  إعادة المحاولة
+                </button>
+              </p>
+            )}
+            {quran.status === 'ready' &&
+              (quranMatches.length === 0 ? (
+                <p className="text-sm text-[#6B5B45]">لا آية في المصحف توافق هذا العدد بهذه الدرجات.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {quranMatches.map((s, i) => (
+                    <SuggestionItem key={i} suggestion={s} />
+                  ))}
+                </ul>
+              ))}
+
+            <div className="mb-1 mt-3 border-t border-[#EFE6CC] pt-2 text-xs font-medium text-[#6B5B45]">
+              من القاعدة الموثّقة المحلية (أعداد صريحة · فواتح · إضافاتك)
             </div>
             {suggestions.length === 0 ? (
               <p className="text-sm text-[#6B5B45]">لا اقتراحات لهذا العدد.</p>
             ) : (
               <ul className="space-y-2">
                 {suggestions.map((s, i) => (
-                  <li key={i} className="rounded-lg border border-[#EFE6CC] p-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded bg-[#F5EEDD] px-2 py-0.5 text-[10px] text-[#6B4F2A]">
-                        {MATCH_TYPE_LABELS[s.matchType]}
-                      </span>
-                      {!s.documented && (
-                        <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                          غير موثّق
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-lg leading-relaxed" style={AMIRI}>{s.entry.textExcerpt}</p>
-                    <p className="text-xs text-[#6B5B45]">
-                      سورة {s.entry.surah}، آية {s.entry.ayahNumber}
-                      {s.entry.note ? ` — ${s.entry.note}` : ''}
-                    </p>
-                    <p className="mt-1 text-xs text-[#6B4F2A]">لماذا؟ {s.trace}</p>
-                  </li>
+                  <SuggestionItem key={i} suggestion={s} />
                 ))}
               </ul>
             )}
@@ -409,6 +455,29 @@ export default function UnifiedReducer({ onOpenRule }) {
 
       <AboutPanel compact />
     </div>
+  );
+}
+
+function SuggestionItem({ suggestion: s }) {
+  return (
+    <li className="rounded-lg border border-[#EFE6CC] p-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded bg-[#F5EEDD] px-2 py-0.5 text-[10px] text-[#6B4F2A]">
+          {ALL_MATCH_TYPE_LABELS[s.matchType] ?? s.matchType}
+        </span>
+        {!s.documented && (
+          <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+            غير موثّق
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-lg leading-relaxed" style={AMIRI}>{s.entry.textExcerpt}</p>
+      <p className="text-xs text-[#6B5B45]">
+        سورة {s.entry.surah}، آية {s.entry.ayahNumber}
+        {s.entry.note ? ` — ${s.entry.note}` : ''}
+      </p>
+      <p className="mt-1 text-xs text-[#6B4F2A]">لماذا؟ {s.trace}</p>
+    </li>
   );
 }
 
