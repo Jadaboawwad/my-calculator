@@ -82,6 +82,7 @@ function toEntry(verse, note) {
   return {
     id: `quran-${verse.surahNumber}-${verse.ayahNumber}`,
     surah: verse.surahName,
+    surahNumber: verse.surahNumber,
     ayahNumber: verse.ayahNumber,
     textExcerpt: verse.text,
     category: 'quran_api',

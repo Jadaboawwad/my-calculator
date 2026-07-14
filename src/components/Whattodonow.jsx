@@ -7,6 +7,9 @@ import {
   loadQuranCorpus,
   buildQuranIndex,
   matchQuranVerses,
+  fetchTafsir,
+  resolveSurahNumber,
+  TAFSIR_EDITION_LABEL,
   MATCH_TYPE_LABELS,
   QURAN_MATCH_TYPE_LABELS,
   SEED_ENTRIES,
@@ -55,6 +58,93 @@ function useQuranCorpus() {
 
   useEffect(load, [load]);
   return { ...state, retry: load };
+}
+
+/** زر + لوحة تفسير الآية — يُجلب عند الطلب عبر QURAN API (تفسير الميسّر) */
+function AyahTafsirPanel({ entry, corpus }) {
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState('idle'); // idle | loading | ready | error
+  const [tafsir, setTafsir] = useState(null);
+  const [error, setError] = useState(null);
+
+  const surahNumber = useMemo(
+    () => resolveSurahNumber(entry, corpus),
+    [entry, corpus]
+  );
+  const ayahKey = `${surahNumber}:${entry?.ayahNumber}`;
+
+  // عند تغيّر الآية: أخفِ التفسير السابق وأعد الحالة
+  useEffect(() => {
+    setOpen(false);
+    setStatus('idle');
+    setTafsir(null);
+    setError(null);
+  }, [ayahKey]);
+
+  const load = useCallback(async () => {
+    if (!surahNumber || !entry?.ayahNumber) {
+      setError('تعذر تحديد رقم السورة لهذه الآية');
+      setStatus('error');
+      return;
+    }
+    setStatus('loading');
+    setError(null);
+    try {
+      const data = await fetchTafsir(surahNumber, entry.ayahNumber);
+      setTafsir(data);
+      setStatus('ready');
+    } catch (e) {
+      setError(e.message);
+      setStatus('error');
+    }
+  }, [surahNumber, entry?.ayahNumber]);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && status === 'idle') load();
+  };
+
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={!surahNumber && !corpus}
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-sky-400/50 bg-sky-900/40 px-4 py-2.5 text-sm font-semibold text-sky-100 hover:bg-sky-800/50 disabled:opacity-50"
+      >
+        <BookOpen size={16} />
+        {open ? 'إخفاء التفسير' : 'تفسير الآية'}
+        <span className="text-[10px] font-normal text-sky-300/80">— {TAFSIR_EDITION_LABEL}</span>
+      </button>
+
+      {open && (
+        <div className="mt-2 rounded-lg border border-sky-400/40 bg-sky-950/50 p-4">
+          {status === 'loading' && (
+            <p className="text-sm text-sky-200">جارٍ جلب التفسير من QURAN API…</p>
+          )}
+          {status === 'error' && (
+            <p className="text-sm text-red-200">
+              {error}{' '}
+              <button type="button" onClick={load} className="underline">
+                إعادة المحاولة
+              </button>
+            </p>
+          )}
+          {status === 'ready' && tafsir && (
+            <>
+              <p className="text-base leading-relaxed text-sky-50 font-arabic whitespace-pre-wrap">
+                {tafsir.text}
+              </p>
+              <p className="mt-2 text-[10px] text-sky-300/70">
+                المصدر: {tafsir.editionName} — سورة {entry.surah} آية {entry.ayahNumber}
+              </p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
@@ -255,6 +345,8 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
               <div className="text-lg font-bold text-amber-100">{main.entry.ayahNumber}</div>
             </div>
           </div>
+
+          <AyahTafsirPanel entry={main.entry} corpus={quran.corpus} />
 
           {mainRec && (
             <div className="mt-3 bg-gradient-to-r from-green-800/40 to-emerald-800/40 rounded-lg p-4 border border-green-400/50">

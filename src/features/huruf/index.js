@@ -5,7 +5,7 @@ export { default as HurufModule } from './components/HurufModule';
 // المحرك الموحد (SPEC v2)
 export { reduce, CANONICAL_MODULUS, LIBRA_BURJ_INDEX, SCALES } from './lib/engine';
 export { suggestVerses, MATCH_TYPE_LABELS } from './lib/verseSuggest';
-export { loadQuranCorpus } from './lib/quranApi';
+export { loadQuranCorpus, fetchTafsir, resolveSurahNumber, TAFSIR_EDITION_LABEL } from './lib/quranApi';
 export { buildQuranIndex, matchQuranVerses, QURAN_MATCH_TYPE_LABELS } from './lib/quranMatch';
 export { reduceMoment } from './lib/momentVerse';
 export { loadUserEntries, addUserEntry, removeUserEntry } from './lib/userVerses';

@@ -155,4 +155,76 @@ export function resetQuranCorpusMemory() {
   inflightFetch = null;
 }
 
+/** تفسير الميسّر — مختصر وواضح، مناسب لعرض سريع بجانب الآية */
+export const TAFSIR_EDITION = 'ar.muyassar';
+export const TAFSIR_EDITION_LABEL = 'تفسير الميسّر (مجمع الملك فهد)';
+
+/**
+ * يجلب تفسير آية واحدة عبر QURAN API.
+ * @param {number} surahNumber
+ * @param {number} ayahNumber
+ * @param {{ edition?: string, fetchImpl?: typeof fetch }} [opts]
+ * @returns {Promise<{ text: string, edition: string, editionName: string, surahNumber: number, ayahNumber: number }>}
+ */
+export async function fetchTafsir(surahNumber, ayahNumber, opts = {}) {
+  const { edition = TAFSIR_EDITION, fetchImpl = fetch } = opts;
+  const surah = Number(surahNumber);
+  const ayah = Number(ayahNumber);
+  if (!Number.isInteger(surah) || surah < 1 || surah > 114) {
+    throw new Error('رقم السورة غير صالح لجلب التفسير');
+  }
+  if (!Number.isInteger(ayah) || ayah < 1) {
+    throw new Error('رقم الآية غير صالح لجلب التفسير');
+  }
+
+  const url = `https://api.alquran.cloud/v1/ayah/${surah}:${ayah}/${edition}`;
+  const response = await fetchImpl(url);
+  if (!response.ok) {
+    throw new Error(`تعذر جلب التفسير (HTTP ${response.status})`);
+  }
+  const json = await response.json();
+  const text = String(json?.data?.text || '').replace(/\uFEFF/g, '').trim();
+  if (json?.code !== 200 || !text) {
+    throw new Error('استجابة التفسير فارغة أو غير صالحة');
+  }
+  return {
+    text,
+    edition: json.data.edition?.identifier ?? edition,
+    editionName: json.data.edition?.name ?? TAFSIR_EDITION_LABEL,
+    surahNumber: json.data.surah?.number ?? surah,
+    ayahNumber: json.data.numberInSurah ?? ayah,
+  };
+}
+
+/**
+ * يستخرج رقم السورة من مدخل آية: حقل صريح، أو معرّف quran-N-A، أو بحث بالاسم في المصحف المحمّل.
+ * @param {{surahNumber?: number, surah?: string, ayahNumber?: number, id?: string}} entry
+ * @param {QuranAyah[]|null} [corpus]
+ * @returns {number|null}
+ */
+export function resolveSurahNumber(entry, corpus = null) {
+  if (!entry) return null;
+  const direct = Number(entry.surahNumber);
+  if (Number.isInteger(direct) && direct >= 1 && direct <= 114) return direct;
+
+  const fromId = String(entry.id || '').match(/^quran-(\d+)-(\d+)$/);
+  if (fromId) return Number(fromId[1]);
+
+  if (corpus && entry.surah && entry.ayahNumber != null) {
+    const name = cleanSurahName(entry.surah);
+    const hit = corpus.find(
+      (a) => a.surahName === name && a.ayahNumber === Number(entry.ayahNumber)
+    );
+    if (hit) return hit.surahNumber;
+    // أسماء محلية قد تختلف قليلًا — طابق بالاسم المضمَّن
+    const soft = corpus.find(
+      (a) =>
+        a.ayahNumber === Number(entry.ayahNumber) &&
+        (a.surahName.includes(name) || name.includes(a.surahName))
+    );
+    if (soft) return soft.surahNumber;
+  }
+  return null;
+}
+
 export default loadQuranCorpus;

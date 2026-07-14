@@ -6,8 +6,11 @@ import {
   saveCorpusToCache,
   loadQuranCorpus,
   resetQuranCorpusMemory,
+  fetchTafsir,
+  resolveSurahNumber,
   EXPECTED_AYAH_COUNT,
   QURAN_CORPUS_STORAGE_KEY,
+  TAFSIR_EDITION,
 } from '../quranApi';
 
 /** استجابة API وهمية بعدد الآيات الكامل — سورة واحدة كبيرة تكفي للتحقق البنيوي */
@@ -97,5 +100,43 @@ describe('quranApi — جلب نص المصحف عبر QURAN API', () => {
   it('loadQuranCorpus: خطأ HTTP يُبلَّغ برسالة عربية واضحة', async () => {
     const fetchImpl = async () => ({ ok: false, status: 503 });
     await expect(loadQuranCorpus({ fetchImpl, storage: null })).rejects.toThrow(/503/);
+  });
+});
+
+describe('quranApi — جلب تفسير الآية', () => {
+  it('fetchTafsir: يقرأ نص التفسير واسم الطبعة', async () => {
+    const fetchImpl = async (url) => {
+      expect(url).toContain('/ayah/2:29/ar.muyassar');
+      return {
+        ok: true,
+        json: async () => ({
+          code: 200,
+          data: {
+            text: 'تفسير تجريبي للآية',
+            numberInSurah: 29,
+            edition: { identifier: TAFSIR_EDITION, name: 'تفسير المیسر' },
+            surah: { number: 2 },
+          },
+        }),
+      };
+    };
+    const t = await fetchTafsir(2, 29, { fetchImpl });
+    expect(t.text).toBe('تفسير تجريبي للآية');
+    expect(t.surahNumber).toBe(2);
+    expect(t.ayahNumber).toBe(29);
+    expect(t.edition).toBe(TAFSIR_EDITION);
+  });
+
+  it('fetchTafsir: يرفض أرقامًا غير صالحة', async () => {
+    await expect(fetchTafsir(0, 1)).rejects.toThrow(/السورة/);
+    await expect(fetchTafsir(2, 0)).rejects.toThrow(/الآية/);
+  });
+
+  it('resolveSurahNumber: من الحقل أو المعرّف أو اسم السورة في المصحف', () => {
+    expect(resolveSurahNumber({ surahNumber: 2, ayahNumber: 29 })).toBe(2);
+    expect(resolveSurahNumber({ id: 'quran-36-1', ayahNumber: 1 })).toBe(36);
+    const corpus = [{ surahNumber: 2, surahName: 'البقرة', ayahNumber: 29, text: '…' }];
+    expect(resolveSurahNumber({ surah: 'البقرة', ayahNumber: 29 }, corpus)).toBe(2);
+    expect(resolveSurahNumber({ surah: 'سورة غير موجودة', ayahNumber: 1 }, corpus)).toBeNull();
   });
 });
