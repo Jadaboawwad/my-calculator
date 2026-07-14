@@ -5,6 +5,7 @@ export { default as HurufModule } from './components/HurufModule';
 // المحرك الموحد (SPEC v2)
 export { reduce, CANONICAL_MODULUS, LIBRA_BURJ_INDEX, SCALES } from './lib/engine';
 export { suggestVerses, MATCH_TYPE_LABELS } from './lib/verseSuggest';
+export { reduceMoment } from './lib/momentVerse';
 export { loadUserEntries, addUserEntry, removeUserEntry } from './lib/userVerses';
 
 // المكتبات الأساسية (يستعملها المحرك نفسه)
