@@ -1,12 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Clock, Pin, PinOff, BookOpen, Sparkles, Star, Compass } from 'lucide-react';
 import { getNumberInfo } from './../../Quranicnumbersdatabase';
 import {
   reduceMoment,
   suggestVerses,
+  loadQuranCorpus,
+  buildQuranIndex,
+  matchQuranVerses,
+  MATCH_TYPE_LABELS,
+  QURAN_MATCH_TYPE_LABELS,
   SEED_ENTRIES,
   loadUserEntries,
-  isDocumented,
   numberToLetters,
   NATURE_LABELS,
   PLANET_LABELS,
@@ -15,10 +19,12 @@ import {
 
 // «ماذا أفعل الآن» — يعمل بالكامل على المحرك الموحد (SPEC v2):
 // استنطاق التاريخ الهجري والوقت (+ الرقم المختار) ← reduce({scale:'text'}) ← اقتراح آيات
-// من قاعدة الآيات ذات الأعداد المحلية، مع أثر «لماذا» لكل اقتراح. بلا أي نداء شبكة.
+// من كامل المصحف عبر QURAN API (نفس قواعد النظام)، مع القاعدة المحلية كمكمل موثّق.
 
 const READING_DISCLAIMER_NOTE =
   'قراءة وصفية تعليمية حسب منطق النظام التراثي — ليست تنبؤًا ولا حكمًا ولا توصية شخصية.';
+
+const ALL_MATCH_LABELS = { ...MATCH_TYPE_LABELS, ...QURAN_MATCH_TYPE_LABELS };
 
 /** توصية الآية من قاعدة الأرقام الأصلية (نفس المصدر الذي بُنيت منه المدخلات الصريحة) */
 function recommendationFor(entry) {
@@ -33,9 +39,28 @@ function muqattaatFor(surahName) {
   return MUQATTAAT_GROUPS.find((g) => g.surahNames.includes(surahName)) || null;
 }
 
+function useQuranCorpus() {
+  const [state, setState] = useState({ status: 'loading', corpus: null, error: null });
+
+  const load = useCallback(() => {
+    setState({ status: 'loading', corpus: null, error: null });
+    let cancelled = false;
+    loadQuranCorpus()
+      .then((corpus) => !cancelled && setState({ status: 'ready', corpus, error: null }))
+      .catch((e) => !cancelled && setState({ status: 'error', corpus: null, error: e.message }));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(load, [load]);
+  return { ...state, retry: load };
+}
+
 const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [pinned, setPinned] = useState(null);
+  const quran = useQuranCorpus();
 
   // الساعة تُحدَّث كل ثانية؛ الاختزال يعاد حسابه عند تغيّر الدقيقة أو الرقم المختار فقط
   useEffect(() => {
@@ -54,13 +79,38 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minuteKey, selectedNumber]);
 
-  const suggestions = useMemo(() => {
+  const quranIndex = useMemo(
+    () => (quran.corpus ? buildQuranIndex(quran.corpus) : null),
+    [quran.corpus]
+  );
+
+  // الأولوية: مطابقة من كامل المصحف (٦٢٣٦ آية) بنفس قواعد النظام
+  const quranMatches = useMemo(() => {
+    if (!moment || !quranIndex) return [];
+    return matchQuranVerses(moment.result, quranIndex, { limit: 8 });
+  }, [moment, quranIndex]);
+
+  // مكمل: القاعدة المحلية (أعداد صريحة · فواتح · إضافات المستخدم)
+  const localSuggestions = useMemo(() => {
     if (!moment) return [];
     return suggestVerses(moment.result, {
       entries: [...SEED_ENTRIES, ...loadUserEntries()],
       limit: 5,
     });
   }, [moment]);
+
+  // دمج بلا تكرار: كامل المصحف أولًا، ثم المحلي
+  const suggestions = useMemo(() => {
+    const seen = new Set();
+    const merged = [];
+    for (const s of [...quranMatches, ...localSuggestions]) {
+      const key = `${s.entry.surah}:${s.entry.ayahNumber}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(s);
+    }
+    return merged;
+  }, [quranMatches, localSuggestions]);
 
   if (!moment) return null;
 
@@ -139,6 +189,26 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
         </div>
       </div>
 
+      {/* حالة تحميل/خطأ نص المصحف */}
+      {quran.status === 'loading' && !main && (
+        <div className="rounded-2xl border border-purple-400/40 bg-purple-900/30 p-4 text-sm text-purple-100">
+          جارٍ تحميل نص المصحف الكامل (٦٢٣٦ آية) من QURAN API لمطابقة الآية باللحظة…
+        </div>
+      )}
+      {quran.status === 'error' && (
+        <div className="rounded-2xl border border-red-400/40 bg-red-900/30 p-4 text-sm text-red-100">
+          تعذر تحميل نص المصحف: {quran.error}{' '}
+          <button type="button" onClick={quran.retry} className="underline">
+            إعادة المحاولة
+          </button>
+          {localSuggestions.length > 0 && (
+            <span className="block mt-1 text-xs text-red-200/80">
+              يُعرض مؤقتًا من القاعدة المحلية حتى يعود الاتصال.
+            </span>
+          )}
+        </div>
+      )}
+
       {/* الآية الرئيسة */}
       {main && (
         <div className="bg-gradient-to-br from-amber-900/40 via-orange-900/40 to-red-900/40 backdrop-blur-lg rounded-2xl p-4 sm:p-6 border-2 border-amber-400/50 shadow-xl">
@@ -156,6 +226,17 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
               {pinned ? <PinOff size={12} /> : <Pin size={12} />}
               {pinned ? 'إلغاء التثبيت' : 'تثبيت'}
             </button>
+          </div>
+
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="rounded bg-amber-400/20 border border-amber-300/40 px-2 py-0.5 text-[10px] text-amber-100">
+              {ALL_MATCH_LABELS[main.matchType] ?? main.matchType}
+            </span>
+            {main.entry.category === 'quran_api' && (
+              <span className="rounded bg-emerald-400/15 border border-emerald-300/40 px-2 py-0.5 text-[10px] text-emerald-100">
+                من كامل المصحف (٦٢٣٦)
+              </span>
+            )}
           </div>
 
           <div className="bg-gradient-to-r from-purple-800/30 to-blue-800/30 p-4 sm:p-6 rounded-lg border border-purple-400/30">
@@ -222,6 +303,16 @@ const WhatToDoNow = ({ selectedNumber, selectedNumberInfo }) => {
           <ul className="space-y-2">
             {suggestions.slice(1).map((s, i) => (
               <li key={i} className="bg-white/5 rounded-lg p-3 border border-gray-500/30">
+                <div className="mb-1 flex flex-wrap gap-1">
+                  <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] text-gray-300">
+                    {ALL_MATCH_LABELS[s.matchType] ?? s.matchType}
+                  </span>
+                  {s.entry.category === 'quran_api' && (
+                    <span className="rounded bg-emerald-400/15 px-2 py-0.5 text-[10px] text-emerald-200">
+                      كامل المصحف
+                    </span>
+                  )}
+                </div>
                 <p className="text-lg text-gray-100 font-arabic leading-relaxed">{s.entry.textExcerpt}</p>
                 <p className="text-xs text-gray-400 mt-1">
                   سورة {s.entry.surah}، آية {s.entry.ayahNumber} — {s.trace}
